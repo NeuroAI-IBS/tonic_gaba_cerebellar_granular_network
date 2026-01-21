@@ -1,0 +1,476 @@
+// Initialization of the simulation
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+load_file("nrngui.hoc")
+load_file("vecevent.ses")
+objref cvode,MFtoGCfile,MFtoGCfile1,MFtoGCfile2,MFtoGoCfile,pc1,IndexfileGoC
+objref GoCtoGCfile,PFtoGoCfile,AxontoGoCfile,IndexfileGC
+objref MFGoCtotalfile,MFGCtotalfile,PFGoCtotalfile,AxonGoCtotalfile
+objref GoCcoordinatesfile, GCcoordinatesfile, MFcoordinatesfile, MFspikefile
+objref GoCspiketimefile, cvector,GCspiketimefile, VMGoCfile, VMGCfile,BCSpikefile
+objref PFtoSCfile, PFtoBCfile, PFSCtotalfile, PFBCtotalfile, BCgapfile,gapconfile,BCtoBCfile,SCSpikeFile
+objref SCcoordinatesfile, BCcoordinatesfile,SCGapFile,SCtoSCFile
+objref rand,timefile, Vtime, MFBundleCenter,MFBundleCenter_file
+objref StellatePop , BasketPop
+
+
+rand = new Random()
+rand.uniform(-80,60)
+pc1=new ParallelContext()
+cvode = new CVode(0)
+cvector = new Vector()
+cvode.active(0)
+use_mcell_ran4(1)
+//cvode.use_local_dt(1)
+st = pc1.time
+
+// load global Parameters
+xopen("Parameters.hoc")
+//  model functions
+xopen("utilities.hoc")
+// conectivity rules and synaptic delay
+xopen("enPassage.hoc")
+
+// Create GoC Cell population
+print "Reading Golgi cell template"
+
+
+xopen("Golgi_template.hoc")
+xopen("GolgiPopulation.hoc")
+
+// Create GRC Cell population
+print "Reading Granule cell template"
+
+xopen("Granule_template.hoc")
+//xopen("GranulePopulation.hoc")
+xopen("GranulePopulation.hoc")
+
+
+////Create the Mossy fiber input source
+print "Creating network input"
+
+xopen("MFPopulation.hoc")
+
+if (MLplug==1){ // This part is reserved for future development
+
+// Create Stellate Cell population
+print "Reading Stellate cell template"
+xopen("gap.hoc")
+xopen("SC_template.hoc")
+xopen("StellatePopulation.hoc")
+
+// Create Basket Cell population
+print "Reading Basket cell template"
+
+xopen("BC1_Template.hoc")
+
+//xopen("BC1_Template.hoc")
+xopen("BasketPopulation1.hoc")
+}
+
+print "Cells populations created"
+//print pc1.id
+
+objref hines
+hinest1 = startsw()
+hinest2 = startsw()
+hines = new FInitializeHandler(2, "hinest1=startsw() hinest2=startsw() hines1()")
+proc hines1() {
+        dt = step_time
+        printf("%d t=%g dt=%g dreal=%g treal=%g\n", \
+                pc1.id, t, dt, startsw()-hinest2, startsw()-hinest1)
+              //  if(pc1.gid_exists(5)){
+              //        print "Vm",pc1.gid2cell(5).soma.v(0.5)
+              //    }
+        hinest2 = startsw()
+        cvode.event(t + 1, "hines1()")
+}
+
+
+//print pc1.id
+//Create the network connections
+print"Creating Network Connections"
+
+xopen("netconMFtoGoC.hoc")
+xopen("netconMFtoGC.hoc")
+xopen("netconGoCtoGC.hoc")
+xopen("netconGCtoGoC.hoc")
+if (MLplug==1){ // This part is reserved for future development
+    xopen("netconPFtoSC.hoc")
+    xopen("netconPFtoBC.hoc")
+}
+print "Connectivity pattern created"
+objref vmgoc_vec[GolgiPop.GoCcoordinates.nrow], vmgc_vec[GranulePop.GCcoordinates.nrow]
+//pc1 = new ParallelContext()
+
+proc vm_record(){
+
+for rank=0, pc1.nhost-1 { // host 0 first, then 1, 2, etc.
+
+pc1.barrier()
+  if (rank==pc1.id) {
+
+            // Granule cells connections
+            for (i=pc1.id; i < GranulePop.GCcoordinates.nrow-1; i +=pc1.nhost) {
+                vmgc_vec[i] = new Vector()
+                vmgc_vec[i].record(&pc1.gid2cell(i+GolgiPop.GoCcoordinates.nrow).soma.v(.5),step_record)
+            }
+
+            // Golgi cells connections
+            for (j=pc1.id; j < GolgiPop.GoCcoordinates.nrow-1; j +=pc1.nhost) {
+                vmgoc_vec[j] = new Vector()
+                vmgoc_vec[j].record(&pc1.gid2cell(j).soma.v(.5),step_record)
+            }
+
+    }
+}
+
+}
+
+
+proc savedata(){
+
+MFtoGCfile = new File()
+MFtoGCfile1 = new File()
+MFtoGCfile2 = new File()
+MFtoGoCfile = new File()
+GoCtoGCfile = new File()
+PFtoGoCfile = new File()
+AxontoGoCfile = new File()
+MFGoCtotalfile = new File()
+MFGCtotalfile = new File()
+PFGoCtotalfile = new File()
+AxonGoCtotalfile = new File()
+MFcoordinatesfile = new File()
+GoCcoordinatesfile = new File()
+GCcoordinatesfile = new File()
+GoCspiketimefile = new File()
+GCspiketimefile = new File()
+MFspikefile = new File()
+VMGoCfile = new File()
+VMGCfile = new File()
+PFtoSCfile = new File()
+PFtoBCfile = new File()
+PFSCtotalfile = new File()
+PFBCtotalfile = new File()
+SCcoordinatesfile = new File()
+BCcoordinatesfile = new File()
+BCSpikefile = new File()
+BCgapfile = new File()
+gapconfile = new File()
+BCtoBCfile = new File()
+SCSpikeFile = new File()
+SCGapFile = new File()
+SCtoSCFile = new File()
+//MFcoordinates = new File()
+
+//MFBundleCenter_file = new File()
+
+
+if (pc1.id==0){
+    MFtoGCfile.wopen("MFtoGC.bin")
+    MFtoGCfile1.wopen("MFtoGC1.dat")
+    MFtoGCfile2.wopen("MFtoGC2.bin")
+    MFtoGoCfile.wopen("MFtoGoC.bin")
+    GoCtoGCfile.wopen("GoCtoGC.bin")
+    PFtoGoCfile.wopen("PFtoGoC.bin")
+    AxontoGoCfile.wopen("AxontoGoC.bin")
+    MFGoCtotalfile.wopen("MFGoCtotal.bin")
+    MFGCtotalfile.wopen("MFGCtotal.bin")
+    PFGoCtotalfile.wopen("PFGoCtotal.bin")
+    AxonGoCtotalfile.wopen("AxonGoCtotal.bin")
+    MFcoordinatesfile.wopen("MFcoordinates.dat")
+    GoCcoordinatesfile.wopen("GoCcoordinates.dat")
+    GCcoordinatesfile.wopen("GCcoordinates.dat")
+    GoCspiketimefile.wopen("GoCspiketime.bin")
+    GCspiketimefile.wopen("Gspiketime.bin")
+    MFspikefile.wopen("MFspiketime.bin")
+    PFtoSCfile.wopen("PFtoSC.bin")
+    PFtoBCfile.wopen("PFtoBC.bin")
+    PFSCtotalfile.wopen("PFSCtotal.bin")
+    PFBCtotalfile.wopen("PFBCtotal.bin")
+    VMGoCfile.wopen("VMGoC.bin")
+    VMGCfile.wopen("VMGC.bin")
+    SCcoordinatesfile.wopen("SCcoordinates.dat")
+    BCcoordinatesfile.wopen("BCcoordinates.dat")
+    BCSpikefile.wopen("BCSpike.bin")
+    BCgapfile.wopen("BCgap.bin")
+    BCtoBCfile.wopen("BCtoBC.bin")
+    gapconfile.wopen("gapcon.dat")
+    SCSpikeFile.wopen("SCSpike.bin")
+    SCGapFile.wopen("SCGap.bin")
+    SCtoSCFile.wopen("SCtoSC.bin")
+
+    //MFcoordinates.wopen("MFc.dat")
+    //MFBundleCenter_file.wopen("MFBundleCenter.dat")
+
+
+    enPassage[0].MFGoCtotal.vwrite(MFGoCtotalfile)
+    enPassage[0].MFGCtotal.vwrite(MFGCtotalfile)
+    enPassage[0].PFtotal.vwrite(PFGoCtotalfile)
+    enPassage[0].Axontotal.vwrite(AxonGoCtotalfile)
+    enPassage[0].PFSCtotal.vwrite(PFSCtotalfile)
+    enPassage[0].PFBCtotal.vwrite(PFBCtotalfile)
+
+
+    //MossyPop.MFBundleCenter.fprint(0,MFBundleCenter_file,"%f\t")
+
+
+    MossyPop.MFcoordinates.fprint(0,MFcoordinatesfile,"%f\t")
+
+    MFtoGCfile.close("MFtoGC.bin")
+    MFtoGCfile1.close("MFtoGC1.dat")
+    MFtoGCfile2.close("MFtoGC2.bin")
+    MFtoGoCfile.close("MFtoGoC.bin")
+    GoCtoGCfile.close("GoCtoGC.bin")
+    PFtoGoCfile.close("PFtoGoC.bin")
+    AxontoGoCfile.close("AxontoGoC.bin")
+    MFGoCtotalfile.close("MFGoCtotal.bin")
+    MFGCtotalfile.close("MFGCtotal.bin")
+    PFGoCtotalfile.close("PFGoCtotal.bin")
+    AxonGoCtotalfile.close("AxonGoCtotal.bin")
+    MFcoordinatesfile.close("MFcoordinates.dat")
+    GoCcoordinatesfile.close("GoCcoordinates.dat")
+    GCcoordinatesfile.close("GCcoordinates.dat")
+    GoCspiketimefile.close("GoCspiketime.bin")
+    GCspiketimefile.close("Gspiketime.bin")
+    MFspikefile.close("MFspiketime.bin")
+    PFtoSCfile.close("PFtoSC.bin")
+    PFtoBCfile.close("PFtoBC.bin")
+    PFSCtotalfile.close("PFSCtotal.bin")
+    PFBCtotalfile.close("PFBCtotal.bin")
+    SCcoordinatesfile.close("SCcoordinates.dat")
+    BCcoordinatesfile.close("BCcoordinates.dat")
+    BCSpikefile.close("BCSpike.bin")
+    BCgapfile.close("BCgap.bin")
+    BCtoBCfile.close("BCtoBC.bin")
+    gapconfile.close("gapcon.dat")
+    SCSpikeFile.close("SCSpike.bin")
+    SCGapFile.close("SCGap.bin")
+    SCtoSCFile.close("SCtoSC.bin")
+
+    //MFBundleCenter_file.close("MFBundleCenter.dat")
+
+    VMGoCfile.close("VMGoC.bin")
+    VMGCfile.close("VMGC.bin")
+
+}
+print "Saving data on host", pc1.id
+for rank=0, pc1.nhost-1 { // host 0 first, then 1, 2, etc.
+pc1.barrier()
+  if (rank==pc1.id) {
+
+        MFtoGCfile.aopen("MFtoGC.bin")
+        MFtoGCfile1.aopen("MFtoGC1.dat")
+        MFtoGCfile2.aopen("MFtoGC2.bin")
+        MFtoGoCfile.aopen("MFtoGoC.bin")
+        GoCtoGCfile.aopen("GoCtoGC.bin")
+        PFtoGoCfile.aopen("PFtoGoC.bin")
+        AxontoGoCfile.aopen("AxontoGoC.bin")
+        GoCspiketimefile.aopen("GoCspiketime.bin")
+        GCspiketimefile.aopen("Gspiketime.bin")
+        MFspikefile.aopen("MFspiketime.bin")
+        GoCcoordinatesfile.aopen("GoCcoordinates.dat")
+        GCcoordinatesfile.aopen("GCcoordinates.dat")
+        VMGCfile.aopen("VMGC.bin")
+        VMGoCfile.aopen("VMGoC.bin")
+        PFtoSCfile.aopen("PFtoSC.bin")
+        PFtoBCfile.aopen("PFtoBC.bin")
+        BCtoBCfile.aopen("BCtoBC.bin")
+        BCgapfile.aopen("BCgap.bin")
+        SCcoordinatesfile.aopen("SCcoordinates.dat")
+        BCcoordinatesfile.aopen("BCcoordinates.dat")
+        BCSpikefile.aopen("BCSpike.bin")
+        gapconfile.aopen("gapcon.dat")
+        SCSpikeFile.aopen("SCSpike.bin")
+        SCGapFile.aopen("SCGap.bin")
+        SCtoSCFile.aopen("SCtoSC.bin")
+            // Granule cells connections
+            for (i=pc1.id; i < GranulePop.GCcoordinates.nrow-1; i +=pc1.nhost) {
+                pc1.gid2cell(i+GolgiPop.GoCcoordinates.nrow).spiketime.vwrite(GCspiketimefile)
+                pc1.gid2cell(i+GolgiPop.GoCcoordinates.nrow).MFID.vwrite(MFtoGCfile)
+                pc1.gid2cell(i+GolgiPop.GoCcoordinates.nrow).MFI.vwrite(MFtoGCfile2)
+                pc1.gid2cell(i+GolgiPop.GoCcoordinates.nrow).MFT.fprint(MFtoGCfile1,"%f\t")
+                pc1.gid2cell(i+GolgiPop.GoCcoordinates.nrow).GoCID.vwrite(GoCtoGCfile)
+
+                GCx=GranulePop.GCcoordinates.x[i][0]
+                GCy=GranulePop.GCcoordinates.x[i][1]
+                GCz=GranulePop.GCcoordinates.x[i][2]
+                GCcoordinatesfile.printf("%f\t %f\t %f\n",GCx,GCy,GCz)
+//              vmgc_vec[i].vwrite(VMGCfile)
+
+            }
+
+            // Golgi cells connections
+            for (j=pc1.id; j < GolgiPop.GoCcoordinates.nrow-1; j +=pc1.nhost) {
+                pc1.gid2cell(j).spikecount.vwrite(GoCspiketimefile)
+                pc1.gid2cell(j).MFID.vwrite(MFtoGoCfile)
+                pc1.gid2cell(j).PFID.vwrite(PFtoGoCfile)
+                pc1.gid2cell(j).AxonID.vwrite(AxontoGoCfile)
+                pc1.gid2cell(j).setv(rand.repick())
+
+                GoCx=GolgiPop.GoCcoordinates.x[j][0]
+                GoCy=GolgiPop.GoCcoordinates.x[j][1]
+                GoCz=GolgiPop.GoCcoordinates.x[j][2]
+                GoCcoordinatesfile.printf("%f\t %f\t %f\n",GoCx,GoCy,GoCz)
+//              vmgoc_vec[j].vwrite(VMGoCfile)
+
+            }
+
+        if (MLplug==1){ // This part is reserved for future development
+
+
+            // Stellate cells connections
+            if (pc1.id ==0) {
+            for (i=pc1.id; i < StellatePop.SCcoordinates.nrow; i +=1) {
+                pc1.gid2cell(i+GranulePop.GCcoordinates.nrow+GolgiPop.GoCcoordinates.nrow+MossyPop.MFcoordinates.nrow).PFID.vwrite(PFtoSCfile)
+                pc1.gid2cell(i+GranulePop.GCcoordinates.nrow+GolgiPop.GoCcoordinates.nrow+MossyPop.MFcoordinates.nrow).gapid.vwrite(SCGapFile)
+                pc1.gid2cell(i+GranulePop.GCcoordinates.nrow+GolgiPop.GoCcoordinates.nrow+MossyPop.MFcoordinates.nrow).SCID.vwrite(SCtoSCFile)
+                SCx=StellatePop.SCcoordinates.x[i][0]
+                SCy=StellatePop.SCcoordinates.x[i][1]
+                SCz=StellatePop.SCcoordinates.x[i][2]
+                SCcoordinatesfile.printf("%f\t %f\t %f\n",SCx,SCy,SCz)
+                pc1.gid2cell(i+GranulePop.GCcoordinates.nrow+GolgiPop.GoCcoordinates.nrow+MossyPop.MFcoordinates.nrow).spikecount.vwrite(SCSpikeFile)
+
+            }
+
+            // Basket cells connections
+
+            for (i=pc1.id; i < BasketPop.BCcoordinates.nrow; i +=1) {
+                pc1.gid2cell(i+GranulePop.GCcoordinates.nrow+GolgiPop.GoCcoordinates.nrow+MossyPop.MFcoordinates.nrow+StellatePop.SCcoordinates.nrow).PFID.vwrite(PFtoBCfile)
+                pc1.gid2cell(i+GranulePop.GCcoordinates.nrow+GolgiPop.GoCcoordinates.nrow+MossyPop.MFcoordinates.nrow+StellatePop.SCcoordinates.nrow).gapid.vwrite(BCgapfile)
+                pc1.gid2cell(i+GranulePop.GCcoordinates.nrow+GolgiPop.GoCcoordinates.nrow+MossyPop.MFcoordinates.nrow+StellatePop.SCcoordinates.nrow).BCID.vwrite(BCtoBCfile)
+
+                BCx=BasketPop.BCcoordinates.x[i][0]
+                BCy=BasketPop.BCcoordinates.x[i][1]
+                BCz=BasketPop.BCcoordinates.x[i][2]
+                BCcoordinatesfile.printf("%f\t %f\t %f\n",BCx,BCy,BCz)
+                pc1.gid2cell(i+GranulePop.GCcoordinates.nrow+GolgiPop.GoCcoordinates.nrow+MossyPop.MFcoordinates.nrow+StellatePop.SCcoordinates.nrow).spikecount.vwrite(BCSpikefile)
+
+            }
+            enPassage[0].gapcon.fprint(0,gapconfile,"%e\t")
+        }
+
+
+        }
+
+            // MF input pattern
+            if (pc1.id==0){ // generate MF Population only in host=0
+                for i=0,MossyPop.MFcoordinates.nrow-1 {
+                MossyPop.VecList.object(i).vwrite(MFspikefile)
+                }
+            }
+
+
+    MFtoGCfile.close("MFtoGC.bin")
+    MFtoGCfile1.close("MFtoGC1.dat")
+    MFtoGCfile2.close("MFtoGC2.bin")
+    MFtoGoCfile.close("MFtoGoC.bin")
+    GoCtoGCfile.close("GoCtoGC.bin")
+    PFtoGoCfile.close("PFtoGoC.bin")
+    AxontoGoCfile.close("AxontoGoC.bin")
+    GoCspiketimefile.close("GoCspiketime.bin")
+    GCspiketimefile.close("Gspiketime.bin")
+    MFspikefile.close("MFspiketime.bin")
+    GoCcoordinatesfile.close("GoCcoordinates.dat")
+    GCcoordinatesfile.close("GCcoordinates.dat")
+    VMGCfile.close("VMGC.bin")
+    VMGoCfile.close("VMGoC.bin")
+    PFtoSCfile.close("PFtoSC.bin")
+    PFtoBCfile.close("PFtoBC.bin")
+    BCtoBCfile.close("BCtoBC.bin")
+    SCcoordinatesfile.close("SCcoordinates.dat")
+    BCcoordinatesfile.close("BCcoordinates.dat")
+    BCSpikefile.close("BCSpike.bin")
+    BCgapfile.close("BCgap.bin")
+    SCSpikeFile.close("SCSpike.bin")
+    SCGapFile.close("SCGap.bin")
+    SCtoSCFile.close("SCtoSC.bin")
+
+  }
+}
+pc1.barrier() // wait for all hosts to get to this point
+
+
+} // end proc
+
+
+
+tstop=stoptime
+
+objref vecgf, vecg1,vecgf1
+objref savv, savt, mat1,mat2
+if (pc1.id == 0) {
+
+vecgf = new Vector()
+vecg1 = new Vector()
+vecgf1 = new Vector()
+vecgf.record(&pc1.gid2cell(10754).soma.v(0.5))
+vecg1.record(&t)
+vecgf1.record(&pc1.gid2cell(10786).soma.v(0.5))
+
+
+}
+
+
+
+
+
+
+
+vm_record()
+
+
+
+{pc1.set_maxstep(10)}
+stdinit()
+//run()
+
+{pc1.psolve(tstop)}
+
+if (pc1.id ==0) {
+
+savv = new File()
+savt = new File()
+mat1 = new Matrix(1+(tstop/0.025),2)
+mat1.setcol(0, vecg1)
+mat1.setcol(1,vecgf)
+mat2 = new Matrix(1+(tstop/0.025),2)
+mat2.setcol(0, vecg1)
+mat2.setcol(1,vecgf1)
+
+savv.wopen("cell3somav.dat")
+savt.wopen("cell3somat.dat")
+savv.close("cell3somav.dat")
+savt.close()
+savv.aopen("cell3somav.dat")
+savt.aopen("cell3somat.dat")
+
+//mat1.fprint(savv)
+//vecgf.vwrite(savv)
+mat1.fprint(savv,"%f\t")
+mat2.fprint(savt,"%f\t")
+savv.close()
+savt.close()
+
+}
+
+savedata()
+
+
+{pc1.runworker()}
+{pc1.done()}
+printf("Time = %4g\t on host =%4g \n", pc1.time - st,pc1.id)
+
+
+//quit()
+
+
+

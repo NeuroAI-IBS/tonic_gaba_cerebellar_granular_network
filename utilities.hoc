@@ -1,0 +1,827 @@
+// Helper functions used in the simulation:
+// * Probablity calculation for connections between interneurons
+// * Normal distribution
+// * Calculation of the connection probability as function of the position in the z axis
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+
+func NormalMF(){ local x,P,sigma,mu
+    x = $1
+    sigma=$2
+    mu=$3
+    P = exp((-(x-mu)*(x-mu))/2*sigma*sigma)/(sigma*sqrt(2*PI))
+    return P
+}
+
+// Exponential distribution PDF
+//
+// ExpPDF (x,beta,lambda)
+//
+
+func ExpPDF () {local x,beta,lambda,P
+
+    x = $1
+    beta = $2
+    lambda = $3
+
+    P = beta * exp(-lambda * x)
+
+    return P
+}
+
+
+//
+// Boltzmann distribution PDF - fits a sigmoidal curve.
+//
+// BoltzmannPDF (x,A1,A2,x0,dx)
+//
+// Parameters:
+// A1 = initial value, A2 = final value, x0 = center, dx = time constant
+//
+func BoltzmannPDF() {
+    x = $1
+    A1 = $2
+    A2 = $3
+    x0 = $4
+    dx = $5
+
+    P = (A1 - A2) / (1 + exp ((x - x0) / dx)) + A2
+
+    return P
+}
+
+
+
+obfunc createconnection() { localobj r,r1,seglist,seglist1,pc,net,receptor,nc,Nclist,Rlist,NCandR
+
+    pc = new ParallelContext()
+    PID = $4
+    SCID = $5
+    numsynapses = $1
+
+    delay=$6
+    step_time=$7
+    seed=$8
+    Nclist=new List()
+    Rlist = new List()
+    NCandR = new List()
+        //print "numsynapses"
+    //print numsynapses
+    nleaves = $2
+    nsegments = $3
+    r = new Random(seed)
+    //r.discunif(0,1)
+    r1 = new Random(seed)
+    i = 0
+    seglist = new Vector() // list of segments to be synapsed with
+    seglist1 = new Vector() // list of segments that are already synapsed
+
+    net = new NetStim()
+    net.start = 1
+    net.number = 100
+    while (i<numsynapses) {
+        if (i==0) {
+            choose = r.discunif(1,int(nsegments/2))   /// upper stellate cells synapses with first two leaf levels
+        if (choose == 1) {
+            current = 1
+            seglist1.append(current)
+            receptor = pc.gid2cell(PID).getsynapse((choose)/nsegments,3,0)
+            Rlist.append(receptor)
+            nc=pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+
+
+        }else  {
+            current = 1+(nleaves*choose)
+
+            seglist1.append(current)
+
+            receptor = pc.gid2cell(PID).getsynapse((choose)/nsegments,3,0)
+            Rlist.append(receptor)
+            nc=pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+
+        }
+        }else {   // choose up, down and straight next branch and add them in a list
+            //print "here"
+            //print current
+            //print i
+            up = current-nleaves
+            down = current+nleaves
+            next = current+1
+            if (up>0) {
+                if (seglist1.contains(up) ==0 && seglist.contains(up) ==0 ) {
+                seglist.append(up)
+                }
+            }
+            if (down<=nsegments*nleaves) {
+                if (seglist1.contains(down) ==0 && seglist.contains(down) ==0 ) {
+                seglist.append(down)
+                //print down
+                }
+            }
+            if (next<=nleaves*nsegments && current%nleaves!=0) {
+                if (seglist1.contains(next) ==0 && seglist.contains(next) ==0 ) {
+                seglist.append(next)
+                }
+            }
+
+
+        len = seglist.size()  // choose randomly from a list
+
+        ind = r1.discunif(0,len-1)
+
+        segno = seglist.x[ind]
+
+        tmp = segno
+        current = segno
+        //seglist.printf()
+        //segno = %4 // num_leaves = 4 TO DO :import from python
+        seglist.remove(ind)
+        seglist1.append(segno)
+
+
+        count = 1            //  which segment in the leaf to synapse with
+        for (j=1;j<=nleaves;j+=1) {
+            tmp = tmp-nleaves
+            if (tmp>0) {
+            count = count+1
+            }else{
+            break
+            }
+        }
+
+        if (segno%nleaves == 1) {       // find which leaves to synapse with
+            //print "synapse with leaf 1"
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegments,3,0)
+            Rlist.append(receptor)
+            nc = pc.gid_connect(SCID,receptor)  //  which segment in the leaf to synapse with
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+        }
+        if (segno%nleaves == 2) {
+            //print "synapse with leaf 2"
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegments,3,1)
+            Rlist.append(receptor)
+            nc = pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+        }
+        if (segno%nleaves == 3) {
+            //print "synapse with leaf 3"
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegments,3,2)
+            Rlist.append(receptor)
+            nc = pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+        }
+        if (segno%nleaves == 0) {
+            //print "synapse with leaf 4"
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegments,3,3)
+            Rlist.append(receptor)
+            nc = pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+            }
+
+        } //else
+        i =i+1
+        //print i
+    }//while
+        NCandR.append(Nclist)
+        NCandR.append(Rlist)
+        return NCandR
+
+
+
+}
+
+
+
+obfunc createconnection1() { localobj r,r1,seglist,seglist1,pc,receptor,nc,Nclist,Rlist,NCandR
+
+    pc = new ParallelContext()
+    numsynapses = $1
+    //print "numsynapses"
+    //print numsynapses
+    nleaves = $2
+    nsegmentsforleaf = $3
+    nfork = $4
+    nsegmentsforfork = $5
+    nsegmentsfortrunk = $6
+    PID = $7
+    SCID = $8
+    Nclist = new List()
+    NCandR = new List()
+
+    delay=int($9)
+    step_time=$10
+    seed = $11
+    r = new Random(seed)
+    r1 = new Random(seed)
+    h = 0
+    seglist = new Vector()
+    seglist1 = new Vector()
+    Rlist = new List()
+    total = (nsegmentsforleaf*nleaves)+(nsegmentsforfork +nfork)
+
+
+         receptor = pc.gid2cell(PID).getsynapse(0.5,0,1)    ///with soma
+         Rlist.append(receptor)
+         nc=pc.gid_connect(SCID,receptor)
+         if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+        Nclist.append(nc)
+
+         h=h+1
+
+         if (h<numsynapses) {
+         selecttrunk = r.discunif(0,nsegmentsfortrunk-1)
+         receptor = pc.gid2cell(PID).getsynapse((selecttrunk+1/nsegmentsfortrunk),1,0)
+         Rlist.append(receptor)   ///with trunk
+         nc=pc.gid_connect(SCID,receptor)
+         if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+
+         h=h+1
+}
+
+   //print h
+   //print "host"
+    while (h<numsynapses) {
+        if (h==2) {   /// upper stellate cells synapses with first two leaf levels
+
+        //print choose
+           choose = r.discunif(int(nsegmentsforleaf/2)+1,nsegmentsforleaf)
+
+            // print "debug"
+            current = (choose*nleaves)+1
+            seglist1.append(current)
+
+
+         receptor = pc.gid2cell(PID).getsynapse((choose/nsegmentsforleaf),3,0)
+         Rlist.append(receptor)
+         nc=pc.gid_connect(SCID,receptor)
+         if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+            //print nc
+
+
+
+
+        }else {   // choose up, down and straight next branch and add them in a list
+
+
+            if (current <= nleaves*nsegmentsforleaf) {
+            up = current-nleaves
+            down = current+nleaves
+            next = current+1
+            } else {
+            up = current -nfork
+            down = current+nfork
+            next = current+1
+            }
+            if (up>0) {
+                if (seglist1.contains(up) ==0 && seglist.contains(up) ==0 ) {
+                seglist.append(up)
+                }
+            }
+            if (down<=total) {
+                if (seglist1.contains(down) ==0 && seglist.contains(down) ==0 ) {
+                seglist.append(down)
+                //print down
+                }
+            }
+            if (current%nleaves!=0 || current%nfork!=0) {
+                if (seglist1.contains(next) ==0 && seglist.contains(next) ==0 ) {
+                seglist.append(next)
+                }
+            }
+
+       // print "synapse with soma"
+        len = seglist.size()  // choose randomly from a list
+        //print len
+        ind = r1.discunif(0,len-1)
+        //print ind
+        segno = seglist.x[ind]
+
+        tmp = segno
+        current = segno
+        //seglist.printf()
+        seglist.remove(ind)
+
+        seglist1.append(segno)
+
+        if (current <= nleaves*nsegmentsforleaf) {
+
+        count = 1            //  which segment in the leaf to synapse with
+        for (j=1;j<=nleaves;j+=1) {
+            tmp = tmp-nleaves
+            if (tmp>0) {
+            count = count+1
+            }else{
+            break
+            }
+        }
+
+
+        if (segno%nleaves == 1) {       // find which leaves to synapse with
+            //print "synapse with leaf 1"
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegmentsforleaf,3,0)
+            Rlist.append(receptor)
+            nc = pc.gid_connect(SCID,receptor)  //  which segment in the leaf to synapse with
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+
+        }
+        if (segno%nleaves == 2) {
+            //print "synapse with leaf 2"
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegmentsforleaf,3,1)
+            Rlist.append(receptor)
+            nc =pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+
+        }
+        if (segno%nleaves == 3) {
+            //print "synapse with leaf 3"
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegmentsforleaf,3,2)
+            Rlist.append(receptor)
+            nc = pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+
+        }
+        if (segno%nleaves == 0) {
+            //print "synapse with leaf 4"
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegmentsforleaf,3,3)
+            Rlist.append(receptor)
+            nc = pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+
+
+        }
+        }else{
+
+        tmp = tmp-(nleaves*nsegmentsforleaf)
+        current = tmp
+        count = 1            //  which segment in the leaf to synapse with
+        for (j=1;j<=nfork;j+=1) {
+            tmp = tmp-nfork
+            if (tmp>0) {
+            count = count+1
+            }else{
+            break
+            }
+        }
+
+        if (current%nfork == 1) {       // find which leaves to synapse with
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegmentsforfork,2,0)
+            Rlist.append(receptor)
+            nc = pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+
+        }
+        if (current%nfork == 0) {
+            receptor = pc.gid2cell(PID).getsynapse((count)/nsegmentsforfork,2,1)
+            Rlist.append(receptor)
+            nc = pc.gid_connect(SCID,receptor)
+            if (delay<=step_time){
+                nc.delay=step_time +step_time/10
+            }else{
+                nc.delay=delay
+            }
+            Nclist.append(nc)
+
+        }
+
+
+        }//else fork
+        }//else i>2
+        h =h+1
+        //print h
+    }//while
+      //  print "end"
+
+        NCandR.append(Nclist)
+        NCandR.append(Rlist)
+        return NCandR
+
+
+
+    }
+
+
+func expPF(){
+    x=$1/1000  // delta x in mm
+    a=0.7             //0.9915
+    b=-4.205      //-1.205
+    P = a*exp(b*x)
+    return P
+}
+
+
+func expPFY(){
+    x=$1/1000  // delta x in mm
+    a=0.7 //0.6
+    b=-4.205  //-15.205
+    P = a*exp(b*x)
+    return P
+}
+
+
+func round() {
+    if ($1>0) {
+        return int($1+0.5)
+    } else {
+      return int($1-0.5)
+    }
+}
+
+func evenodd() {
+    if($1 % 2 == 0){
+    print "It's even"
+    }else{
+    print "It's odd"
+    }
+}
+
+func erf1() {
+return(exp(-($1*$1)))
+}
+
+func test1() {localobj r
+r = new Random($1)
+//print r.discunif(0,1)
+return 0
+}
+
+
+
+
+obfunc findpoints() {local mu1,mu2,sd1,sd2,a,b,numpoints localobj pc,r,disvec,V1,V2,V3,V4,V5,V6,V7,V8,Numsynapses,CDF,CDF1
+
+pc = new ParallelContext()
+r = new Random()
+disvec = new Vector()
+disvec = $o1
+mu1 = r.normal(29,35)
+//print mu1   //mean of gauss1 (picked from normal distribution)
+mu2 = r.normal(22,14)   //SD of gauss1 (picked from normal distribution)
+sd1 = r.normal(153,86)  //%mean of of gauss2(picked from normal distribution)
+sd2 = r.normal(59,34)   //%SD of gauss2 (picked fromnomal distribution)
+a =   r.normal(2.4,1.3) //%ratio of gauss1togauss2( picked from normal distribution)
+b = r.normal(149,61)
+c = r.normal(220,12)
+Numsynapses = new Vector()
+cp=0
+cp1=0
+for i=0, disvec.size()-1 {
+
+//print "disvec"
+//disvec.printf()
+//if (disvec.x[i] == 0) {
+//break
+//}
+
+
+V1 = new Vector()
+if (disvec.x[i]-c/2 >0) {
+    cp=cp+1
+V2 = new Vector()
+//print disvec.x[i-1]
+V1= V1.indgen(0,(disvec.x[i]-c/2),0.005)
+V2= V2.indgen(0,(disvec.x[i]-c/2),0.005)
+
+for j=0,V1.size()-1 {
+V1.x[j] = (V1.x[j]-mu1)/(sqrt(2)*sd1)
+V2.x[j] = (V2.x[j]-mu2)/(sqrt(2)*sd2)
+}
+V1.apply("erf")
+V2.apply("erf")
+//V3=new Vector()
+//V3.integral(V1,0.01)
+//V4 = new Vector()
+//V4.integral(V2,0.01)
+
+//print "here"
+V5 = new Vector()
+V6 = new Vector()
+V5 = V5.indgen(0,(disvec.x[i]+c/2),0.005)
+V6 = V6.indgen(0,(disvec.x[i]+c/2),0.005)
+for j=0,V5.size()-1 {
+V5.x[j] = (V5.x[j]-mu1)/(sqrt(2)*sd1)
+V6.x[j] = (V6.x[j]-mu2)/(sqrt(2)*sd2)
+}
+
+
+V5.apply("erf")
+V6.apply("erf")
+//V7 = new Vector()
+//V8 = new Vector()
+//V7.integral(V5,0.01)
+//V8.integral(V6,0.01)
+
+CDF = new Vector(V5.size())
+CDF1 = new Vector(V1.size())
+for j=0,V1.size()-1 {
+    CDF1.x[j] = (1/(2*a)*(1+V1.x[j])+(a-1)/(2*a)*(1+V2.x[j]))
+}
+for j=0,V5.size()-1 {
+
+    CDF.x[j] = (1/(2*a)*(1+V5.x[j])+(a-1)/(2*a)*(1+V6.x[j]))
+}
+
+
+    //CDF = @(x)( 1/(2*a)*(1+ erf( (x-mu1)/ (sqrt(2)*sd1))) + (a-1)/(2*a)*(1+ erf((x-mu2)/ (sqrt(2)*sd2 ))));
+
+
+//CDF1.printf()
+//CDF.printf()
+numpoints = (CDF.max() - CDF1.max())*b
+//print "numpoints"
+//print numpoints
+//print numpoints/5
+
+
+}else{
+cp1=cp1+1
+V5 = new Vector()
+V6 = new Vector()
+V5 = V5.indgen(0,(disvec.x[i]+c/2),0.005)
+V6 = V6.indgen(0,(disvec.x[i]+c/2),0.005)
+for j=0,V5.size()-1 {
+V5.x[j] = (V5.x[j]-mu1)/(sqrt(2)*sd1)
+V6.x[j] = (V6.x[j]-mu2)/(sqrt(2)*sd2)
+}
+
+
+V5.apply("erf")
+V6.apply("erf")
+CDF1 = new Vector(V5.size())
+for j=0,V5.size()-1 {
+    CDF1.x[j] = (1/(2*a)*(1+V5.x[j])+(a-1)/(2*a)*(1+V6.x[j]))
+    //print "shyam"
+
+    //CDF = @(x)( 1/(2*a)*(1+ erf( (x-mu1)/ (sqrt(2)*sd1))) + (a-1)/(2*a)*(1+ erf((x-mu2)/ (sqrt(2)*sd2 ))));
+}
+
+    //print "correct till here"
+
+numpoints = CDF1.max()*b
+//print "numpoints"
+//print numpoints
+} //else
+
+
+    //print "correct here"
+Numsynapses.append(numpoints/14)
+
+
+} //for
+
+//Numsynapses.printf()
+//print Numsynapses.max()
+//Numsynapses.printf()
+//print disvec.size()
+//print cp
+//print cp1
+return Numsynapses
+
+}
+
+
+
+
+// Probablity calculation for connections between interneurons
+
+func calprob1() {local p
+
+        p = ((-0.5/80)*$1)+0.5
+        return p
+    }
+
+
+
+func calprob() {local p,tmp
+tmp = $1
+if (tmp<=15) {
+    p = ((0.2/15)*tmp)
+    return p
+}
+if (tmp>=16 && tmp <=70) {
+    p = 0.2
+    return p
+}
+
+if (tmp>=71 && tmp <=80) {
+    p = ((-0.2/9)*(tmp-71))+0.2
+    return p
+}
+
+if (tmp>=81) {
+return 0
+
+}
+
+}
+
+obfunc FindUniqueGC() { localobj indexvec,GCvec,vtemp
+
+
+GCvec = $o1
+indexvec=new Vector()
+vtemp=new Vector()
+for i=0,GCvec.size()-1 {
+indexvec = vtemp.c.indvwhere(vtemp,"==",GCvec.x[i])
+if (indexvec.size() == 0) {
+vtemp.append(GCvec.x[i])
+}else{
+continue
+}
+}
+//print vtemp
+return vtemp
+
+}
+
+obfunc FindGL() {localobj m,xvec,yvec,zvec,GLdistance,indGL,GLlist
+
+//m=new Matrix()
+m=$o1
+x  =   $2
+y  =   $3
+z  =   $4
+radius=$5
+
+GLlist = new List()
+xvec=new Vector()
+yvec=new Vector()
+zvec=new Vector()
+GLdistance=new Vector()
+indGL = new Vector()
+
+xvec=m.getcol(1)
+yvec=m.getcol(2)
+zvec=m.getcol(3)
+
+xvec=xvec.c.sub(x)
+yvec=yvec.c.sub(y)
+zvec=zvec.c.sub(z)
+
+xvec = xvec.c.mul(xvec)
+yvec = yvec.c.mul(yvec)
+zvec = zvec.c.mul(zvec)
+
+GLdistance = xvec.c.add(yvec)
+GLdistance = GLdistance.c.add(zvec)
+GLdistance=GLdistance.c.sqrt()
+indGL = GLdistance.c.indvwhere(GLdistance,"<=",radius)
+GLlist.append(indGL)
+GLlist.append(GLdistance)
+//printf("GL points with 30um radius = %d\n",indGL.size())
+return GLlist
+}
+
+
+
+obfunc FindGC() {local s1,s2,ind localobj m,xvec,yvec,GCdistance,indGC1,ind1,ind2,indGC2
+
+m=$o1
+x  =   $2
+y  =   $3
+radiusx=$4
+radiusy=$5
+
+indGC2 = new Vector()
+ind1 = new Vector()
+ind2 = new Vector()
+xvec=new Vector()
+yvec=new Vector()
+GCdistance=new Vector()
+indGC1 = new Vector()
+
+xvec=m.getcol(0)
+yvec=m.getcol(1)
+
+xvec=xvec.c.sub(x)
+yvec=yvec.c.sub(y)
+
+xvec = xvec.c.abs(xvec)
+yvec = yvec.c.abs(yvec)
+
+indGC1 = xvec.c.indvwhere(xvec,"<=",radiusx)
+//indGC2 = yvec.c.indvwhere(yvec,"<=",radiusy)
+
+
+//for i=0,indGC1.size()-1 {
+
+//	ind1 = indGC2.c.indvwhere(indGC2,"==",indGC1.x[i])
+//	if (ind1.size>0) {
+//	ind2.append(indGC1.x[i])
+//	}
+//}
+
+//ind2.append(indGC1,indGC2)
+return indGC1
+}
+
+
+
+
+
+obfunc FindAA() {localobj m,xvec,yvec,zvec,GCdistance,indGC
+
+m=$o1
+x  =   $2
+y  =   $3
+radius=$4
+
+xvec=new Vector()
+yvec=new Vector()
+GCdistance=new Vector()
+indGC = new Vector()
+
+xvec=m.getcol(0)
+yvec=m.getcol(1)
+
+xvec=xvec.c.sub(x)
+yvec=yvec.c.sub(y)
+
+xvec = xvec.c.mul(xvec)
+yvec = yvec.c.mul(yvec)
+
+GCdistance = xvec.c.add(yvec)
+GCdistance=GCdistance.c.sqrt()
+indGC = GCdistance.c.indvwhere(GCdistance,"<=",radius)
+return indGC
+}
+
+
+//endtemplate utilities

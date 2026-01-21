@@ -1,0 +1,128 @@
+// Helper functions to save the population data
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+proc save_population_data(){
+
+    pc1 = new ParallelContext()
+
+    pc1.barrier()
+
+    MFcoordinatesfile      = new File()
+    GoCcoordinatesfile     = new File()
+    GoCadendcoordinatesfile = new File()
+    GoCbdendcoordinatesfile = new File()
+    GCTcoordinatesfile     = new File()
+    GCcoordinatesfile      = new File()
+    GoCspiketimefile       = new File()
+    SCcoordinatesfile      = new File()
+    BCcoordinatesfile      = new File()
+
+    if (pc1.id == 0) {
+
+	MFcoordinatesfile.wopen("MFcoordinates.dat")
+	GoCcoordinatesfile.wopen("GoCcoordinates.dat")
+	GoCadendcoordinatesfile.wopen("GoCadendcoordinates.dat")
+	GoCbdendcoordinatesfile.wopen("GoCbdendcoordinates.dat")
+	GCcoordinatesfile.wopen("GCcoordinates.dat")
+	SCcoordinatesfile.wopen("SCcoordinates.dat")
+	BCcoordinatesfile.wopen("BCcoordinates.dat")
+	GCTcoordinatesfile.wopen("GCTcoordinates.dat")
+
+	MossyPop.MFcoordinates.fprint(0,MFcoordinatesfile,"%f\t")
+
+        // Granule cells coordinates
+
+        for (i=0; i < GranulePop.GCcoordinates.nrow; i+=1) {
+
+                GCx=GranulePop.GCcoordinates.x[i][0]
+                GCy=GranulePop.GCcoordinates.x[i][1]
+                GCz=GranulePop.GCcoordinates.x[i][2]
+
+                GCTx=GranulePop.Tcoordinates.x[i][0]
+               	GCTy=GranulePop.Tcoordinates.x[i][1]
+               	GCTz=GranulePop.Tcoordinates.x[i][2]
+
+                GCcoordinatesfile.printf("%f\t %f\t %f\n",GCx,GCy,GCz)
+                GCTcoordinatesfile.printf("%f\t %f\t %f\n",GCTx,GCTy,GCTz)
+         }
+
+         // Golgi cells coordinates
+
+         for (i=pc1.id; i < GolgiPop.GoCcoordinates.nrow; i+=1) {
+
+                GoCx=GolgiPop.GoCcoordinates.x[i][0]
+                GoCy=GolgiPop.GoCcoordinates.x[i][1]
+                GoCz=GolgiPop.GoCcoordinates.x[i][2]
+
+                GoCcoordinatesfile.printf("%f\t %f\t %f\n",GoCx,GoCy,GoCz)
+
+                GoCadendx1 = GolgiPop.Adendcoordinates.x[i][0]
+                GoCadendy1 = GolgiPop.Adendcoordinates.x[i][1]
+                GoCadendz1 = GolgiPop.Adendcoordinates.x[i][2]
+
+                GoCadendx2 = GolgiPop.Adendcoordinates.x[i][3]
+                GoCadendy2 = GolgiPop.Adendcoordinates.x[i][4]
+                GoCadendz2 = GolgiPop.Adendcoordinates.x[i][5]
+
+                GoCadendcoordinatesfile.printf("%f\t %f\t %f\t %f\t %f\t %f\n", GoCadendx1,GoCadendy1,GoCadendz1,GoCadendx2,GoCadendy2,GoCadendz2)
+
+                GoCbdendx1 = GolgiPop.Bdendcoordinates.x[i][0]
+                GoCbdendy1 = GolgiPop.Bdendcoordinates.x[i][1]
+                GoCbdendz1 = GolgiPop.Bdendcoordinates.x[i][2]
+
+                GoCbdendx2 = GolgiPop.Bdendcoordinates.x[i][3]
+                GoCbdendy2 = GolgiPop.Bdendcoordinates.x[i][4]
+                GoCbdendz2 = GolgiPop.Bdendcoordinates.x[i][5]
+
+                GoCbdendcoordinatesfile.printf("%f\t %f\t %f\t %f\t %f\t %f\n", GoCbdendx1,GoCbdendy1,GoCbdendz1,GoCbdendx2,GoCbdendy2,GoCbdendz2)
+            }
+
+        if (MLplug==1) { // This part is reserved for future development
+
+            // Stellate cells population
+            if (pc1.id == 0) {
+
+                for (i=0; i < StellatePop.SCcoordinates.nrow; i +=1) {
+
+                    SCx=StellatePop.SCcoordinates.x[i][0]
+                    SCy=StellatePop.SCcoordinates.x[i][1]
+                    SCz=StellatePop.SCcoordinates.x[i][2]
+                    SCcoordinatesfile.printf("%f\t %f\t %f\n",SCx,SCy,SCz)
+		}
+
+		for (i=0; i < BasketPop.BCcoordinates.nrow; i +=1) {
+
+                    BCx=BasketPop.BCcoordinates.x[i][0]
+                    BCy=BasketPop.BCcoordinates.x[i][1]
+                    BCz=BasketPop.BCcoordinates.x[i][2]
+                    BCcoordinatesfile.printf("%f\t %f\t %f\n",BCx,BCy,BCz)
+                }
+            }
+
+        }// if ML plug
+
+	MFcoordinatesfile.close("MFcoordinates.dat")
+	GoCcoordinatesfile.close("GoCcoordinates.dat")
+	GoCadendcoordinatesfile.close("GoCadendcoordinates.dat")
+	GoCbdendcoordinatesfile.close("GoCbdendcoordinates.dat")
+	GCcoordinatesfile.close("GCcoordinates.dat")
+	SCcoordinatesfile.close("SCcoordinates.dat")
+	BCcoordinatesfile.close("BCcoordinates.dat")
+	GCTcoordinatesfile.close()
+    }
+
+
+    pc1.barrier() // wait for all hosts to get to this point
+
+} // end proc
+
+save_population_data()
+
+

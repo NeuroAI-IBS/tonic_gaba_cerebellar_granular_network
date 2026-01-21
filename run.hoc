@@ -1,0 +1,667 @@
+// MAIN SIMULATION
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+objref vmgoc_vec[GolgiPop.nCells], vmgc_vec[GranulePop.nCells],GC_vol
+
+GC_vol = new Vector()
+
+/////////////////////////////// Procedures to write data ///////////////////////////////
+proc savegc() { local GC_c1,GC_c2 localobj gc
+
+Granulegcurrentfile = new File()
+Granulegconductancefile = new File()
+GranuleVolfile = new File()
+Granulegcurrentfile.wopen("Granulegcurrent.bin")
+Granulegconductancefile.wopen("Granulegconductance.bin")
+GranuleVolfile.wopen("GranuleVoltrace.bin")
+
+Granulegcurrentfile.close()
+Granulegconductancefile.close()
+GranuleVolfile.close()
+
+for rank=0, pc1.nhost-1 { //host 0 first, then 1, 2, etc.
+    pc1.barrier()
+
+    if (rank==pc1.id) {
+        Granulegcurrentfile.aopen("Granulegcurrent.bin")
+        Granulegconductancefile.aopen("Granulegconductance.bin")
+        GranuleVolfile.aopen("GranuleVoltrace.bin")
+
+        for (i=pc1.id; i <GranulePop.GCcoordinates.nrow ; i +=pc1.nhost) {
+
+            GC_c1 = (GranulePop.GCcoordinates.x[i][0]-x_c1)^2+(GranulePop.GCcoordinates.x[i][1]-y_c1)^2
+            GC_c1 = GC_c1<=100*100
+            GC_c2 = (GranulePop.GCcoordinates.x[i][0]-x_c2)^2+(GranulePop.GCcoordinates.x[i][1]-y_c2)^2
+            GC_c2 = GC_c2<=100*100
+            if (GC_c1 ==1 || GC_c2==1) {
+                gc = pc1.gid2cell(i+GranulePop.startindex)
+                if (gc.record_flag==1) {
+                    gc.gabai.insrt(0,i+1)
+                    gc.gabag.insrt(0,i+1)
+                    gc.gabai.vwrite(Granulegcurrentfile)
+                    gc.gabag.vwrite(Granulegconductancefile)
+                    gc.Volvec.vwrite(GranuleVolfile)
+
+                }
+            }
+        }
+
+    Granulegcurrentfile.close()
+    Granulegconductancefile.close()
+    GranuleVolfile.close()
+    }
+}
+
+pc1.barrier()
+
+} // END savegc()
+
+
+
+proc save_connection() { local GoCGoCcount,nGoCgaps,MFGCcount,MFGoCcount,GoCGCcount,AAGoCcount,PFGoCcount localobj gc,goc,MFGCcount_vec,MFGoCcount_vec,GoCGCcount_vec,AAGoCcount_vec,PFGoCcount_vec,GoCGoCcount_vec
+
+MFGCcount = 0
+MFGoCcount = 0
+GoCGCcount = 0
+AAGoCcount = 0
+PFGoCcount = 0
+GoCGoCcount = 0
+
+MFGCcount_vec  = new Vector()
+MFGoCcount_vec = new Vector()
+GoCGCcount_vec  = new Vector()
+AAGoCcount_vec  = new Vector()
+PFGoCcount_vec  = new Vector()
+GoCGoCcount_vec = new Vector()
+
+MFtoGCfile = new File()
+GoCtoGCfile = new File()
+PFtoGoCfile = new File()
+AxontoGoCfile = new File()
+GCGLfile = new File()
+MFGCdelfile = new File()
+MFGoCdelfile = new File()
+PFGoCdelfile = new File()
+AAGoCdelfile = new File()
+GoCGCdelfile = new File()
+GoCGoCdelfile = new File()
+
+if (pc1.id==0) {
+
+    GCGLfile.wopen("GCGL.bin")
+    MFtoGCfile.wopen("MFtoGoC.bin")
+    GoCtoGCfile.wopen("GoCtoGC.bin")
+    PFtoGoCfile.wopen("PFtoGoC.bin")
+    AxontoGoCfile.wopen("AxontoGoC.bin")
+    MFGCdelfile.wopen("MFtoGCdelay.bin")
+    MFGoCdelfile.wopen("MFtoGoCdelay.bin")
+    PFGoCdelfile.wopen("PFtoGoCdelay.bin")
+    AAGoCdelfile.wopen("AAtoGoCdelay.bin")
+    GoCGCdelfile.wopen("GoCtoGCdelay.bin")
+    GoCGoCdelfile.wopen("GoCtoGoCdelay.bin")
+
+
+    GCGLfile.close()
+    MFtoGCfile.close("MFtoGC.bin")
+    GoCtoGCfile.close("GoCtoGC.bin")
+    PFtoGoCfile.close("PFtoGoC.bin")
+    AxontoGoCfile.close("AxontoGoC.bin")
+    MFGCdelfile.close()
+    MFGoCdelfile.close()
+    PFGoCdelfile.close()
+    AAGoCdelfile.close()
+    GoCGCdelfile.close()
+    GoCGoCdelfile.close()
+
+}
+
+for rank=0, pc1.nhost-1 { // host 0 first, then 1, 2, etc.
+pc1.barrier()
+
+    if (rank==pc1.id) {
+        GCGLfile.aopen("GCGL.bin")
+        MFtoGCfile.aopen("MFtoGC.bin")
+        GoCtoGCfile.aopen("GoCtoGC.bin")
+        PFtoGoCfile.aopen("PFtoGoC.bin")
+        AxontoGoCfile.aopen("AxontoGoC.bin")
+
+        MFGCdelfile.aopen("MFtoGCdelay.bin")
+        MFGoCdelfile.aopen("MFtoGoCdelay.bin")
+        PFGoCdelfile.aopen("PFtoGoCdelay.bin")
+        AAGoCdelfile.aopen("AAtoGoCdelay.bin")
+        GoCGCdelfile.aopen("GoCtoGCdelay.bin")
+        GoCGoCdelfile.aopen("GoCtoGoCdelay.bin")
+
+
+        for (i=pc1.id; i < GranulePop.GCcoordinates.nrow; i +=pc1.nhost) {
+            gc = pc1.gid2cell(i+GranulePop.startindex)
+            MFGCcount = MFGCcount+int(gc.MFID.size())
+            GoCGCcount = GoCGCcount+int(gc.GoCID.size())
+            gc.MFID.insrt(0,i+GranulePop.startindex)
+            gc.MFID.add(1)
+            gc.MFID.vwrite(MFtoGCfile)
+
+            gc.MFdel.insrt(0,i+GranulePop.startindex+1)
+            gc.MFdel.vwrite(MFGCdelfile)
+
+            gc.GoCdel.insrt(0,i+GranulePop.startindex+1)
+            gc.GoCdel.vwrite(GoCGCdelfile)
+
+
+            gc.GoCID.insrt(0,i+GranulePop.startindex)
+            gc.GoCID.add(1)
+            gc.GoCID.vwrite(GoCtoGCfile)
+            gc.GLID.insrt(0,i+GranulePop.startindex)
+            gc.GLID.add(1)
+            gc.GLID.vwrite(GCGLfile)
+        }
+
+        for (j=pc1.id; j < GolgiPop.GoCcoordinates.nrow; j +=pc1.nhost) {
+
+            goc = pc1.gid2cell(j+GolgiPop.startindex)
+       	    MFGoCcount = MFGoCcount+int(goc.MFID.size())
+            PFGoCcount = PFGoCcount+int(goc.PFID.size())
+            AAGoCcount = AAGoCcount+int(goc.AxonID.size())
+            GoCGoCcount = GoCGoCcount+int(goc.GoCID.size())
+            goc.PFID.insrt(0,j+GolgiPop.startindex)
+            goc.PFID.add(1)
+            goc.PFID.vwrite(PFtoGoCfile)
+            goc.AxonID.insrt(0,j+GolgiPop.startindex)
+            goc.AxonID.add(1)
+            goc.AxonID.vwrite(AxontoGoCfile)
+
+            goc.MFdel.insrt(0,j+GolgiPop.startindex+1)
+            goc.MFdel.vwrite(MFGoCdelfile)
+
+            goc.PFdel.insrt(0,j+GolgiPop.startindex+1)
+            goc.PFdel.vwrite(PFGoCdelfile)
+
+            goc.Axondel.insrt(0,j+GolgiPop.startindex+1)
+            goc.Axondel.vwrite(AAGoCdelfile)
+
+            goc.GoCdel.insrt(0,j+GolgiPop.startindex+1)
+            goc.GoCdel.vwrite(GoCGoCdelfile)
+        }
+
+        GCGLfile.close()
+        MFtoGCfile.close()
+        GoCtoGCfile.close()
+        PFtoGoCfile.close()
+        AxontoGoCfile.close()
+
+        MFGCdelfile.close()
+        MFGoCdelfile.close()
+        PFGoCdelfile.close()
+        AAGoCdelfile.close()
+        GoCGCdelfile.close()
+        GoCGoCdelfile.close()
+    }
+}
+
+pc1.barrier()
+
+//nGoCgaps = ncGoCtoGoC.vGoCtoGoCgapsourcefinal.size()
+pc1.allgather(MFGCcount,MFGCcount_vec)
+pc1.allgather(MFGoCcount,MFGoCcount_vec)
+pc1.allgather(PFGoCcount,PFGoCcount_vec)
+pc1.allgather(AAGoCcount,AAGoCcount_vec)
+pc1.allgather(GoCGCcount,GoCGCcount_vec)
+pc1.allgather(GoCGoCcount,GoCGoCcount_vec)
+
+printf("Total number of MFGC synapse is %f and Each GC has an average of %f MF syn\n",MFGCcount_vec.sum(),MFGCcount_vec.sum()/GranulePop.GCcoordinates.nrow)
+printf("Total number of MFGoC synapse is %f and Each GoC has an average of %f MF syn\n",MFGoCcount_vec.sum(),MFGoCcount_vec.sum()/GolgiPop.GoCcoordinates.nrow)
+printf("Total number of GoCGC synapse is %f and Each GC has an average of %f GoC syn\n",GoCGCcount_vec.sum(),GoCGCcount_vec.sum()/GranulePop.GCcoordinates.nrow)
+printf("Total number of PFGoC synapse is %f and Each GoC has an average of %f PF syn\n",PFGoCcount_vec.sum(),PFGoCcount_vec.sum()/GolgiPop.GoCcoordinates.nrow)
+printf("Total number of AAGoC synapse is %f and Each GoC has an average of %f AA syn\n",AAGoCcount_vec.sum(),AAGoCcount_vec.sum()/GolgiPop.GoCcoordinates.nrow)
+printf("Total number of GoCGoC synapse is %f and Each GoC has an average of %f GoC syn\n",GoCGoCcount_vec.sum(),GoCGoCcount_vec.sum()/GolgiPop.GoCcoordinates.nrow)
+//printf("Total number of GoCgaps synapse is %f and Each GoC has an average of %f gaps \n",nGoCgaps,(nGoCgaps*2)/GolgiPop.GoCcoordinates.nrow)
+
+}
+
+
+proc savedata() { local objid localobj gc, goc, sc, bc,mf
+
+if (clear_ds == 0) {
+    MFtoGCfile = new File()
+    GoCtoGCfile = new File()
+    PFtoGoCfile = new File()
+    AxontoGoCfile = new File()
+    GCGLfile = new File()
+}
+
+GCcoordinatesfile=new File()
+GoCcoordinatesfile = new File()
+GoCGLfile = new File()
+GolgiVolfile = new File()
+GranuleVolfile = new File()
+MFtoGoCfile = new File()
+GoCtoGoCfile = new File()
+GoCtoGoCgapfile = new File()
+GoCtoGCfile = new File()
+GoCspiketimefile = new File()
+GCspiketimefile = new File()
+MFspikefile = new File()
+VMGoCfile = new File()
+VMGCfile = new File()
+PFtoSCfile = new File()
+PFtoBCfile = new File()
+//PFSCtotalfile = new File()
+//PFBCtotalfile = new File()
+BCSpikefile = new File()
+BCgapfile = new File()
+BCtoBCfile = new File()
+SCSpikeFile = new File()
+SCGapFile = new File()
+SCtoSCFile = new File()
+BCfile = new File()
+PCfile = new File()
+GoCampafile = new File()
+GoCgapsourcefinal = new File()
+GoCgaptargetfinal = new File()
+GoCgapdistancefinal = new File()
+
+if (pc1.id==0){
+    if (clear_ds == 0) {
+        GCGLfile.wopen("GCGL.bin")
+        MFtoGCfile.wopen("MFtoGoC.bin")
+        GoCtoGCfile.wopen("GoCtoGC.bin")
+        PFtoGoCfile.wopen("PFtoGoC.bin")
+        AxontoGoCfile.wopen("AxontoGoC.bin")
+    }
+    GoCGLfile.wopen("GoCGL.bin")
+    GolgiVolfile.wopen("GolgiVoltrace.bin")
+    GranuleVolfile.wopen("GranuleVoltrace.bin")
+    MFtoGoCfile.wopen("MFtoGoC.bin")
+    GoCspiketimefile.wopen("GoCspiketime.bin")
+    GCspiketimefile.wopen("Gspiketime.bin")
+    MFspikefile.wopen("MFspiketime.bin")
+    PFtoSCfile.wopen("PFtoSC.bin")
+    PFtoBCfile.wopen("PFtoBC.bin")
+    //PFSCtotalfile.wopen("PFSCtotal.bin")
+    //PFBCtotalfile.wopen("PFBCtotal.bin")
+    VMGoCfile.wopen("VMGoC.bin")
+    VMGCfile.wopen("VMGC.bin")
+    BCSpikefile.wopen("BCSpike.bin")
+    BCgapfile.wopen("BCgap.bin")
+    BCtoBCfile.wopen("BCtoBC.bin")
+    SCSpikeFile.wopen("SCSpike.bin")
+    SCGapFile.wopen("SCGap.bin")
+    SCtoSCFile.wopen("SCtoSC.bin")
+    BCfile.wopen("BC.bin")
+    PCfile.wopen("PC.bin")
+    GoCampafile.wopen("GoCampa.bin")
+    GoCgapsourcefinal.wopen("GoCgapsourcefinal.bin")
+    GoCgaptargetfinal.wopen("GoCgaptargetfinal.bin")
+    GoCgapdistancefinal.wopen("GoCgapdistancefinal.bin")
+    GCcoordinatesfile.wopen("GCcoordinates.dat")
+    GoCcoordinatesfile.wopen("GoCcoordinates.dat")
+
+    if (GoC_GoC_gap_con == 1) {
+	    ncGoCtoGoC.vGoCtoGoCgapsourcefinal.add(1)
+	    ncGoCtoGoC.vGoCtoGoCgaptargetfinal.add(1)
+	    ncGoCtoGoC.vGoCtoGoCgapsourcefinal.vwrite(GoCgapsourcefinal)
+	    ncGoCtoGoC.vGoCtoGoCgaptargetfinal.vwrite(GoCgaptargetfinal)
+	    ncGoCtoGoC.vGoCtoGoCgapdistancefinal.vwrite(GoCgapdistancefinal)
+    }
+
+    if (clear_ds ==0) {
+    GCGLfile.close()
+    MFtoGCfile.close("MFtoGC.bin")
+    GoCtoGCfile.close("GoCtoGC.bin")
+    PFtoGoCfile.close("PFtoGoC.bin")
+    AxontoGoCfile.close("AxontoGoC.bin")
+    }
+    GoCGLfile.close()
+    MFtoGoCfile.close("MFtoGoC.bin")
+    GoCspiketimefile.close("GoCspiketime.bin")
+    GCspiketimefile.close("Gspiketime.bin")
+    MFspikefile.close("MFspiketime.bin")
+    PFtoSCfile.close("PFtoSC.bin")
+    PFtoBCfile.close("PFtoBC.bin")
+    //PFSCtotalfile.close("PFSCtotal.bin")
+    //PFBCtotalfile.close("PFBCtotal.bin")
+    BCSpikefile.close("BCSpike.bin")
+    BCgapfile.close("BCgap.bin")
+    BCtoBCfile.close("BCtoBC.bin")
+    SCSpikeFile.close("SCSpike.bin")
+    SCGapFile.close("SCGap.bin")
+    SCtoSCFile.close("SCtoSC.bin")
+    BCfile.close("BC.bin")
+    PCfile.close("PC.bin")
+    GoCampafile.close("GoCampa.bin")
+    VMGoCfile.close("VMGoC.bin")
+    VMGCfile.close("VMGC.bin")
+    GoCgapsourcefinal.close()
+    GoCgaptargetfinal.close()
+    GoCgapdistancefinal.close()
+    GolgiVolfile.close()
+    GranuleVolfile.close()
+    GCcoordinatesfile.close()
+    GoCcoordinatesfile.close()
+
+}
+
+print "Saving data on host", pc1.id
+for rank=0, pc1.nhost-1 { // host 0 first, then 1, 2, etc.
+    pc1.barrier()
+
+    if (rank==pc1.id) {
+        if (clear_ds == 0) {
+            GCGLfile.aopen("GCGL.bin")
+            MFtoGCfile.aopen("MFtoGC.bin")
+            GoCtoGCfile.aopen("GoCtoGC.bin")
+            PFtoGoCfile.aopen("PFtoGoC.bin")
+            AxontoGoCfile.aopen("AxontoGoC.bin")
+        }
+        GoCGLfile.aopen("GoCGL.bin")
+        GolgiVolfile.aopen("GolgiVoltrace.bin")
+        GranuleVolfile.aopen("GranuleVoltrace.bin")
+        MFtoGoCfile.aopen("MFtoGoC.bin")
+        GoCtoGoCfile.aopen("GoCtoGoC.bin")
+        GoCspiketimefile.aopen("GoCspiketime.bin")
+        GCspiketimefile.aopen("Gspiketime.bin")
+        MFspikefile.aopen("MFspiketime.bin")
+        VMGCfile.aopen("VMGC.bin")
+        VMGoCfile.aopen("VMGoC.bin")
+        PFtoSCfile.aopen("PFtoSC.bin")
+        PFtoBCfile.aopen("PFtoBC.bin")
+        BCtoBCfile.aopen("BCtoBC.bin")
+        BCgapfile.aopen("BCgap.bin")
+        BCSpikefile.aopen("BCSpike.bin")
+        SCSpikeFile.aopen("SCSpike.bin")
+        SCGapFile.aopen("SCGap.bin")
+        SCtoSCFile.aopen("SCtoSC.bin")
+        BCfile.aopen("BC.bin")
+        PCfile.aopen("PC.bin")
+        GoCampafile.aopen("GoCampa.bin")
+        GCcoordinatesfile.aopen("GCcoordinates.dat")
+        GoCcoordinatesfile.aopen("GoCcoordinates.dat")
+
+
+        // Granule cells connections and spiketimes
+        for (i=pc1.id; i < GranulePop.GCcoordinates.nrow; i +=pc1.nhost) {
+            gc = pc1.gid2cell(i+GranulePop.startindex)
+            gc.spiketime.insrt(0,i+1)
+            gc.spiketime.vwrite(GCspiketimefile)
+            //GCcoordinatesfile.printf("%f\t %f\t %f\t %f\n",GranulePop.GCcoordinates.x[i][0],GranulePop.GCcoordinates.x[i][1],GranulePop.GCcoordinates.x[i][2],i)
+            //gc.Volvec.vwrite(GranuleVolfile)
+
+            if (clear_ds ==0 ) {
+             gc.MFID.insrt(0,i+GranulePop.startindex)
+             gc.MFID.add(1)
+             gc.MFID.vwrite(MFtoGCfile)
+             gc.GoCID.insrt(0,i+GranulePop.startindex)
+             gc.GoCID.add(1)
+             gc.GoCID.vwrite(GoCtoGCfile)
+             gc.GLID.add(1)
+             gc.GLID.vwrite(GCGLfile)
+             }
+        }
+
+
+
+        // Golgi cells connections and spiketimes
+        for (j=pc1.id; j < GolgiPop.GoCcoordinates.nrow; j +=pc1.nhost) {
+
+            goc = pc1.gid2cell(j+GolgiPop.startindex)
+            goc.spiketime.insrt(0,j+1)
+            goc.spiketime.vwrite(GoCspiketimefile)
+            goc.GLID.insrt(0,j+GolgiPop.startindex)
+            goc.GLID.add(1)
+            goc.GLID.vwrite(GoCGLfile)
+            goc.Volvec.insrt(0,j+1)
+            goc.MFID.insrt(0,j+GolgiPop.startindex)
+            goc.MFID.add(1)
+            goc.MFID.vwrite(MFtoGoCfile)
+            if (clear_ds ==0) {
+             goc.PFID.insrt(0,j+GolgiPop.startindex)
+             goc.PFID.add(1)
+             goc.PFID.vwrite(PFtoGoCfile)
+            }
+            goc.GoCID.insrt(0,j+GolgiPop.startindex)
+            goc.GoCID.add(1)
+            goc.GoCID.vwrite(GoCtoGoCfile)
+            if (clear_ds == 0) {
+            goc.AxonID.insrt(0,j+GolgiPop.startindex)
+            goc.AxonID.add(1)
+            goc.AxonID.vwrite(AxontoGoCfile)
+            }
+
+        }
+
+          for (i=pc1.id; i <GolgiPop.GoCcoordinates.nrow ; i +=pc1.nhost) {
+            GoC_c1 = (GolgiPop.GoCcoordinates.x[i][0]-x_c1)^2+(GolgiPop.GoCcoordinates.x[i][1]-y_c1)^2
+            GoC_c1 = GoC_c1<=100*100
+            GoC_c2 = (GolgiPop.GoCcoordinates.x[i][0]-x_c2)^2+(GolgiPop.GoCcoordinates.x[i][1]-y_c2)^2
+            GoC_c2 = GoC_c2<=100*100
+            if (GoC_c1 ==1 || GoC_c2 == 1) {
+            goc = pc1.gid2cell(i+GolgiPop.startindex)
+            goc.Volvec.vwrite(GolgiVolfile)
+            }
+         }
+
+        if (MLplug==1){ // This part is reserved for future development
+
+            // Stellate cells connections and data
+            if (pc1.id ==0) {
+                for (i=pc1.id; i < StellatePop.SCcoordinates.nrow; i +=1) {
+
+                    sc = pc1.gid2cell(i+StellatePop.startindex)
+                    sc.spikecount.insrt(0,i+1)
+                    sc.spikecount.vwrite(SCSpikeFile)
+                    sc.PFID.insrt(0,i+StellatePop.startindex)
+                    sc.PFID.add(1)
+                    sc.PFID.vwrite(PFtoSCfile)
+                    sc.gapid.insrt(0,i+StellatePop.startindex)
+                    sc.gapid.add(1)
+                    sc.gapid.vwrite(SCGapFile)
+                    sc.SCID.insrt(0,i+StellatePop.startindex)
+                    sc.SCID.add(1)
+                    sc.SCID.vwrite(SCtoSCFile)
+            }
+
+
+            // Basket connections and data
+            for (i=pc1.id; i < BasketPop.BCcoordinates.nrow; i +=1) {
+
+		bc = pc1.gid2cell(i+BasketPop.startindex)
+                bc.spikecount.insrt(0,i+1)
+                bc.spikecount.vwrite(BCSpikefile)
+                bc.PFID.insrt(0,i+BasketPop.startindex)
+                bc.PFID.add(1)
+                bc.PFID.vwrite(PFtoBCfile)
+                bc.gapid.insrt(0,i+BasketPop.startindex)
+                bc.gapid.add(1)
+                bc.gapid.vwrite(BCgapfile)
+                bc.BCID.insrt(0,i+BasketPop.startindex)
+                bc.BCID.add(1)
+                bc.BCID.vwrite(BCtoBCfile)
+
+                }
+            }// if pc.id
+
+        }// if ML plug
+
+            // MF input pattern
+
+                for (i =pc1.id;i<MossyPop.nCells;i+=pc1.nhost) {
+                objid = (i-int(pc1.id))/int(pc1.nhost)
+                MossyPop.Cell.object(objid).spiketime.insrt(0,i+1)
+                MossyPop.Cell.object(objid).spiketime.vwrite(MFspikefile)
+
+                }
+
+    if (clear_ds ==0){
+    GCGLfile.close()
+    MFtoGCfile.close()
+    GoCtoGCfile.close()
+    PFtoGoCfile.close()
+    AxontoGoCfile.close()
+    }
+    GoCGLfile.close()
+    MFtoGoCfile.close()
+    GoCtoGoCfile.close()
+    GoCspiketimefile.close()
+    GCspiketimefile.close()
+    MFspikefile.close()
+    VMGCfile.close()
+    VMGoCfile.close()
+    PFtoSCfile.close()
+    PFtoBCfile.close()
+    BCtoBCfile.close()
+    BCSpikefile.close()
+    BCgapfile.close()
+    SCSpikeFile.close()
+    SCGapFile.close()
+    SCtoSCFile.close()
+    BCfile.close()
+    PCfile.close()
+    GoCampafile.close()
+    GolgiVolfile.close()
+    GranuleVolfile.close()
+    GCcoordinatesfile.close()
+    GoCcoordinatesfile.close()
+
+      }
+}
+
+pc1.barrier() // wait for all hosts to get to this point
+
+} // end proc
+
+
+tstop=stoptime
+
+objref vecgf, vecg1,vecgf1,gc_obj,goc_obj,gc1_obj
+objref savv, savt, mat1,mat2,gc,goc,ranobj,rgen
+
+pc1.barrier()
+
+////////////////////////////// clear all data structures ///////////////////////////////
+
+if (clear_ds ==1) {  //clear all data structures
+save_connection() // write connectivity data into bin files before deleting
+        for (i=pc1.id; i < GranulePop.GCcoordinates.nrow; i +=pc1.nhost) {
+            gc = pc1.gid2cell(i+GranulePop.startindex)
+            gc.MFID= nil
+            gc.GoCID=nil
+            gc.MFI=nil
+            gc.MFT=nil
+            gc.MFdel=nil
+            gc.GoCdel=nil
+            gc.cellID=nil
+}
+
+        for (i=pc1.id; i < GolgiPop.GoCcoordinates.nrow; i +=pc1.nhost) {
+            goc = pc1.gid2cell(i+GolgiPop.startindex)
+            goc.PFID= nil
+            goc.AxonID=nil
+            goc.PFdel=nil
+            goc.Axondel=nil
+            goc.PFdend = nil
+            goc.PFseg = nil
+            goc.AAdend = nil
+            goc.AAseg = nil
+
+}
+}
+
+//////////////////////////////////////GoC Vm recording//////////////////////////////////
+
+ranobj = new Random(gseed)
+
+for i=0,GolgiPop.GoCcoordinates.nrow-1 {
+goc_id = i
+GoC_c1 = (GolgiPop.GoCcoordinates.x[i][0]-x_c1)^2+(GolgiPop.GoCcoordinates.x[i][1]-y_c1)^2
+GoC_c1 = GoC_c1<=100*100
+GoC_c2 = (GolgiPop.GoCcoordinates.x[i][0]-x_c2)^2+(GolgiPop.GoCcoordinates.x[i][1]-y_c2)^2
+GoC_c2 = GoC_c2<=100*100
+
+if ( GoC_c1==1 || GoC_c2==1) {
+if (pc1.gid_exists(goc_id+GolgiPop.startindex)) {
+
+goc_obj = pc1.gid2cell(goc_id+GolgiPop.startindex)
+goc_obj.Volvec.record(&goc_obj.soma.v(0.5))
+}
+}
+}
+
+
+
+////////////////////////// GrC Vm, gaba current,conductance recording //////////////////
+rgen=new Random(gseed)
+for i=0,GranulePop.GCcoordinates.nrow-1 {
+gc1_id = i
+GC_c1 = (GranulePop.GCcoordinates.x[i][0]-x_c1)^2+(GranulePop.GCcoordinates.x[i][1]-y_c1)^2
+GC_c1 = GC_c1<=100*100
+GC_c2 = (GranulePop.GCcoordinates.x[i][0]-x_c2)^2+(GranulePop.GCcoordinates.x[i][1]-y_c2)^2
+GC_c2 = GC_c2<=100*100
+
+
+if ( GC_c1==1 || GC_c2==1) {
+    if (rgen.uniform(0,1)<=0.005) {
+        if (pc1.gid_exists(gc1_id+GranulePop.startindex)) {
+            gc1_obj = pc1.gid2cell(gc1_id+GranulePop.startindex)
+            gc1_obj.record_flag = 1
+            gc1_obj.gabai.record(&gc1_obj.ampa.object(0).i_nmda)
+            gc1_obj.gabag.record(&gc1_obj.ampa.object(0).g_nmda)
+            gc1_obj.Volvec.record(&gc1_obj.soma.v(0.5))  //Volvec.record(&soma.v(0.5))
+        }
+        }
+    }
+}
+
+
+//////////////////Set up gap junctions for mpi communication ///////////////////////////
+pc1.timeout(0)
+pc1.setup_transfer()
+pc1.barrier()
+
+///////////////////////////////// INITIALIZATION ///////////////////////////////////////
+proc init() {
+
+    //setting different resting membrane potentials for GoC
+    for (j=pc1.id; j < GolgiPop.GoCcoordinates.nrow; j += pc1.nhost) {
+        vr = pc1.gid2cell(j+GolgiPop.startindex).vrest
+         pc1.gid2cell(j+GolgiPop.startindex).setv(vr)
+    }
+
+    for (j=pc1.id; j < GolgiPop.GoCcoordinates.nrow; j += pc1.nhost) {
+        pc1.gid2cell(j+GolgiPop.startindex).soma ic_constant = -(ina_Golgi_Na+ina_Golgi_NaP+ih_Golgi_hcn1+ih_Golgi_hcn2+ik_Golgi_KA+ik_Golgi_KM+ik_Golgi_KV+ik_Golgi_BK+ik_Golgi_SK2+ica_Golgi_Ca_HVA+ica2_Golgi_Ca_LVA+i_Golgi_lkg+ina_Golgi_NaR)
+        for i=0,numDendGolgi-1 {
+            pc1.gid2cell(j+GolgiPop.startindex).dend[i] ic_constant = -(i_Golgi_lkg)
+        }
+    }
+
+    finitialize()
+
+    if (cvode_active()) {
+        cvode.re_init()
+    } else {
+        fcurrent()
+    }
+    frecord_init()
+}
+
+////////////////////////////////////// Run the model ///////////////////////////////////
+pc1.set_maxstep(10)
+stdinit()
+pc1.psolve(tstop)
+
+//////////////////////////////////////// save data  ////////////////////////////////////
+savedata()
+savegc()
+
+pc1.runworker()
+pc1.done()
+
+printf("Time = %4g\t on host =%4g \n", pc1.time - st,pc1.id)
+
+//quit()

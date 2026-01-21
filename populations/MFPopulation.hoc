@@ -1,0 +1,158 @@
+// Generation of the mossy fiber population
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+begintemplate MFPop
+
+public Cell, MFcoordinates, make, nCells
+public startindex, endindex,GLmatrix
+
+external MFxrange,MFyrange,GoCzrange, MFnoise,MFfreq,GoCdensity,GCtoGoCratio,MFfreqBundle,flag_vecstim,MFxextent,MFyextent
+external MFtoGCzone,Scale_factor,MFdensity
+
+objref pc, Cell, MFcoordinates, SpikeList, spiketime, vstim, vtemp, r, distance
+objref MFBundleCenter,vdesty,vdestz,filewidthy,filewidthz,vdata,Vect_list,vectcor,vecac,vlength
+
+objectvar fdata,fcor,fac, flength,fGL,GLmatrix,vecspike,vcol,vd
+
+proc make(){ local i, srcgid, xr, yr,zr,nx,ny,nz localobj vs,nil,netcon,alocalMF,nc,vtemp
+
+    r  = new Random($1)
+    pc = new ParallelContext()
+    xr = MFxrange
+    yr = MFyrange
+    dmf= MFdensity
+    zr = GoCzrange  // Important for glomeruli definition
+
+    numMF=int((xr+(2*MFxextent))*(yr+(2*MFyextent))*dmf*1e-6)
+    nCells = numMF
+    //printf("\nNumber of Mfs=%d",numMF)
+
+    // The start index of mossy fibers
+    startindex = $2
+
+    // The end index of mossy fibers
+    endindex = startindex+numMF-1
+
+    cou1 = 0
+    cou2 = 1
+
+    vdata = new Vector()
+    Vect_list = new List()
+
+    fGL=new File($s9)
+    fGL.ropen()
+
+    vecspike=new Vector()
+    nw=vecspike.scanf(fGL)
+    fGL.seek(0)
+    GLmatrix=new Matrix(nw/4,4)
+
+    colcount=0
+    MFcount=0
+
+    while (fGL.eof==0){
+        if (colcount==4) {
+            colcount=0
+            MFcount=MFcount+1
+        }
+        tmpdat=fGL.scanvar()
+        GLmatrix.x[MFcount][colcount] = tmpdat
+        colcount=colcount+1
+    }
+
+    fGL.close()
+
+    if (flag_vecstim == 1) {
+        flength = new File($s5) //length
+        vlength = new Vector()
+        flength.ropen()
+        vlength.scanf(flength) //only for active Mossy fibres
+        flength.close()
+
+        fdata = new File($s6) //datasp
+        vtemp = new Vector()
+        fdata.ropen()
+        vdata.scanf(fdata)
+        fdata.close()
+
+        fcor = new File($s7) //mfcr
+        fcor.ropen()
+        vectcor = new Vector()
+        vectcor.scanf(fcor)
+        fcor.close()
+
+        fac = new File($s8) //activemf
+        fac.ropen()
+        vecac = new Vector()
+        vecac.scanf(fac)
+        numacm = vecac.size()
+        fac.close()
+
+        src_start = 0
+
+        for i = 0, vlength.size()-1 {
+            vtemp = new Vector()
+            src_tmp = vlength.x[i]
+
+            vtemp.copy(vdata,0,src_start,src_start+src_tmp-1)
+            src_start=src_start+src_tmp
+            Vect_list.append(vtemp)
+        }
+    }
+
+    // form the list of Cells for the Golgi population
+    Cell = new List()
+    MFcoordinates = new Matrix(numMF,2)
+
+    // List of coordinates Vectors
+    vectstim_counter = 0
+    for srcgid = 0, numMF-1 { // loop over all cells
+        if (flag_vecstim == 1) {
+
+            MFcoordinates.x[srcgid][0]=vectcor.x[cou1]
+            cou1 = cou1+2
+
+            MFcoordinates.x[srcgid][1]=vectcor.x[cou2]
+            cou2 = cou2+2
+
+        } else {
+            MFcoordinates.x[srcgid][0] = r.discunif(0-MFxextent,xr+MFxextent)
+            MFcoordinates.x[srcgid][1] = r.discunif(0-MFyextent,yr+MFyextent)
+        }
+    }
+
+    for (i=pc.id; i < nCells; i +=pc.nhost) {
+        if (flag_vecstim ==1) {
+            alocalMF = new Mossytemp(vecac.x[i])
+        if (vecac.x[i]>0 && flag_vecstim==1) {
+            alocalMF.vs.play(Vect_list.object((int(vecac.x[i]))-1))
+        }
+    } else {
+        alocalMF = new Mossytemp(i)
+    }
+
+    // associate gid i with this host
+    pc.set_gid2node(i+startindex,pc.id)
+
+    nc = alocalMF.connect2target(nil)
+    pc.cell(i+startindex,nc)
+    Cell.append(alocalMF)
+   }
+}
+
+endtemplate MFPop
+
+objref MossyPop
+MossyPop = new MFPop()
+
+MossyPop.make(gseed+2,GolgiPop.nCells+GranulePop.nCells,pathwidthy,pathwidthz,pathl,pathdatasp,pathMFcoordinates,pathactiveMfibres1,pathGLpoints)
+
+
+

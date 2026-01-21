@@ -1,0 +1,304 @@
+/*******Cerebellar Golgi Cell Model **********
+
+FILE: Golgi_template_CL.hoc
+
+Developers:    Sergio Solinas & Egidio D'Angelo
+Code contributors:  Thierry Neius, Shyam Diwakar, Lia Forti
+Data Analysis: Sergio Solinas
+
+Work Progress: April 2004 - May 2007
+
+Developed At:  Universit� Degli Studi Di Pavia
+               Dipartimento Di Scienze Fisiologiche
+               Pavia - Italia
+
+Model Published in:
+             Sergio M. Solinas, Lia Forti, Elisabetta Cesana,
+             Jonathan Mapelli, Erik De Schutter and Egidio D`Angelo (2008)
+             Computational reconstruction of pacemaking and intrinsic
+             electroresponsiveness in cerebellar golgi cells
+             Frontiers in Cellular Neuroscience 2:2
+
+FILE: Golgi_template_CL.hoc
+
+---
+Adapted by Sungho Hong and Claus Lang
+Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+Supervision: Erik De Schutter
+
+Correspondence: Sungho Hong (shhong@oist.jp)
+
+September 16, 2017
+********************************************/
+
+// In this configuration the ion channels
+// were not corrected for the Liquid Junction potential.
+// The ion reversal potential were corrected in agreement
+// with the voltage shift.
+// See Table 1 Solinas et al. 2008 Frontiers Neurosci 2:2
+
+begintemplate Goc
+
+public soma, axon, elec, seal, dend, PFdel, Axondel, GoCdel, AMPAGLid, AMPAMLid, vrest, nD
+public GoCID, MFID, MFdel, synID, AMPAid, spiketime, spikecount, AP, GoC_VM, bandID, AAampa,AAnmda,PF_Fac
+public ampa, gaba, PFampa, connect2target, AxonID, PFID, setv, PFampa1, Volvec,PFnmda,GLID,PFdend,PFseg,AAdend,AAseg,gabaML
+
+external GoC_d_freq,GoC_d_lambda,numDendGolgi,sigmad,GoC_ApicalDendL,GoC_BasolateralDendL,GoC_AxonL,numAMPA,frate,numAMPAGolgiMF,numAMPAGolgiGC,numAMPAGolgiPF,numGABAGoC,numNMDAGolgiPF
+
+create dend[1], soma, axon
+
+objref netcon, nil, MFdel, PFdel, Axondel, spiketime, spikecount, AP
+objref ampa, gaba, PFampa, MFID, synID, AMPAid, GoC_VM,PFnmda,dendlen_list,GLID, gabaML
+objref alph, sigm, AxonID, PFID, AMPAGLid, AMPAMLid, bandID, PFampa1
+objref GoCID, GoCdel, Volvec,AAampa,AAnmda,dendlen_list,PFdend,PFseg,AAdend,AAseg,PF_Fac
+
+proc init() { local nD
+    PF_Fac=new Vector()
+    PFnmda=new List()
+    GLID = new Vector()
+    Volvec = new Vector()
+    PFampa1 = new List()
+    spikecount= new Vector()
+    AxonID=new Vector()
+    PFID=new Vector()
+    PFdend = new Vector()
+    PFseg = new Vector()
+    AAdend = new Vector()
+    AAseg = new Vector()
+    PFdel=new Vector()
+    Axondel=new Vector()
+    MFID=new Vector()
+    MFdel=new Vector()
+    AMPAid=new Vector()
+    AMPAGLid=new Vector()
+    AMPAMLid=new Vector()
+    synID=new Vector()
+    bandID=new Vector()
+    spiketime = new Vector()
+    GoC_VM = new Vector()
+    nD = numDendGolgi
+    eseed = $1
+    vrest = $2
+
+    ampa = new List()
+    gaba = new List()
+    PFampa = new List()
+    alph= new Random(eseed)
+    sigm=new Random()
+    alph.uniform(0,1)
+    AAampa = new List()
+    AAnmda = new List()
+    GoCID=new Vector()
+    GoCdel=new Vector()
+    gabaML = new List()
+
+create soma
+soma {
+    nseg = 1
+    diam = 27 // 22 pF Dieudonne98
+    L = 27
+    Ra = 100 // From Roth&Hausser2000
+//    dprob=alph.uniform(-diam*0.2, diam*0.2)
+//    diam =diam+dprob
+    AP = new APCount(0.5)
+    AP.thresh = -10
+    AP.record(spikecount)
+
+    ///////////////////////
+    // stim=new SEClamp(0.5)
+    // stim.dur1 = 0
+    // stim.rs = 0.001
+    // stim.amp1= -70
+    // vec_curr=new Vector()
+    // vec_curr.record(&stim.i)
+
+    /////////////////////////
+    // Current clamp to introduce phase reset on GoC pop //
+    //CheckCurr = new IClamp(0.5)
+    //CheckCurr.amp =  0
+    //CheckCurr.del =  0
+    //CheckCurr.dur =  0
+
+    insert constant
+    insert Golgi_lkg
+    insert Golgi_Na
+    insert Golgi_NaR
+    insert Golgi_NaP
+    insert Golgi_Ca_HVA
+    insert Golgi_Ca_LVA
+    insert Golgi_KV
+    insert Golgi_KM
+    insert Golgi_KA
+    insert Golgi_BK
+    insert Golgi_SK2
+    insert Golgi_hcn1
+    insert Golgi_hcn2
+    insert Golgi_CALC
+    insert Golgi_CALC_ca2
+
+    fix_celsius = 37
+
+    fix_celsius_Golgi_lkg = fix_celsius
+    fix_celsius_Golgi_Na = fix_celsius
+    fix_celsius_Golgi_NaR = fix_celsius
+    fix_celsius_Golgi_NaP = fix_celsius
+    fix_celsius_Golgi_Ca_HVA = fix_celsius
+    fix_celsius_Golgi_Ca_LVA = fix_celsius
+    fix_celsius_Golgi_KV = fix_celsius
+    fix_celsius_Golgi_KM = fix_celsius
+    fix_celsius_Golgi_KA = fix_celsius
+    fix_celsius_Golgi_BK = fix_celsius
+    fix_celsius_Golgi_SK2 = fix_celsius
+    fix_celsius_Golgi_hcn1 = fix_celsius
+    fix_celsius_Golgi_hcn2 = fix_celsius
+    fix_celsius_Golgi_CALC = fix_celsius
+    fix_celsius_Golgi_CALC_ca2 = fix_celsius
+
+
+     usetable_Golgi_BK = 1
+     usetable_Golgi_LVA = 1
+     usetable_Golgi_HVA = 1
+     usetable_Golgi_KA = 1
+     usetable_Golgi_KV = 1
+     usetable_Golgi_NaR = 1
+     usetable_Golgi_KM = 1
+     usetable_Golgi_Na = 1
+     usetable_Golgi_NaP = 1
+
+    cai0_ca_ion = 50e-6
+    ca2i0_ca2_ion = cai0_ca_ion
+
+    cai = cai0_ca_ion
+
+    ca2i = cai
+    ca2o = cao
+
+    cai0_Golgi_CALC = cai0_ca_ion
+    ca2i0_Golgi_CALC_ca2 = cai0_ca_ion
+
+    ena=87.39
+    ek=-84.69
+} // end soma
+
+    dendlen_list=new Vector()
+    dendlen_list.append(GoC_BasolateralDendL)
+    dendlen_list.append(GoC_BasolateralDendL)
+    dendlen_list.append(GoC_ApicalDendL)
+    dendlen_list.append(GoC_ApicalDendL)
+
+// Create dendrites with unique morphology
+create dend[nD]
+for i=0,nD-1 {
+    dend[i] {
+        L    = dendlen_list.x[i]
+        diam =  2.4 // was 3
+        Ra   = 100
+        cm   = 1
+        nseg = int((L/(GoC_d_lambda*lambda_f(GoC_d_freq))+0.9)/2)*2 + 1
+        insert constant
+        insert Golgi_lkg
+
+        fix_celsius = 37
+        fix_celsius_Golgi_lkg = fix_celsius
+
+        // GoC-GoC inhibitory synapses
+        for k=0,0 {  //GABA synapse
+            gaba.append(new Exp2Syn(0.5))
+            gaba.object(i).tau1=1.9
+            gaba.object(i).tau2 = 14.1
+            //gaba.object(i).tau3 = 84
+            gaba.object(i).e = -80
+        }
+
+        if (i<2) { //MF AMPA
+            for k=0,0 {
+                ampa.append(new Exp2Syn(0.5))
+                ampa.object(i).tau1 = 0.13
+                ampa.object(i).tau2 = 1.1
+                ampa.object(i).e=0
+            }
+
+            for k=0,nseg-1 { //Basal Ampa for each seg
+                segpos = (2*(k+1)-1)/(2*nseg)  //AAAMPA
+                AAampa.append(new Exp2Syn(segpos))
+                AAampa.object((i*nseg)+k).tau1 = 0.06
+                AAampa.object((i*nseg)+k).tau2 = 0.5
+                AAampa.object((i*nseg)+k).e=0
+            }
+
+            for k=0,nseg-1 { //Basal nmda for each segment
+                      segpos = (2*(k+1)-1)/(2*nseg) //AANMDA
+                AAnmda.append(new GoCNMDAexp(segpos))
+                AAnmda.object((i*nseg)+k).tau1 = 4
+                AAnmda.object((i*nseg)+k).tau2 = 100
+                AAnmda.object((i*nseg)+k).tau3 = 255
+                AAnmda.object((i*nseg)+k).e=0
+            }
+
+        }else{
+            for k =0,nseg-1 { //Apical ampa for all seg
+                   segpos = (2*(k+1)-1)/(2*nseg) //PF AMPA
+                PFampa.append(new Exp2Syn(segpos))
+                PFampa.object(((i-2)*nseg)+k).tau1 = 0.06
+                PFampa.object(((i-2)*nseg)+k).tau2 = 0.6
+                PFampa.object(((i-2)*nseg)+k).e=0
+            }
+
+            for k=0,nseg-1 { //Apical nmda for all seg
+                      segpos = (2*(k+1)-1)/(2*nseg) //PF NMDA
+                PFnmda.append(new GoCNMDAexp(segpos))
+                PFnmda.object(((i-2)*nseg)+k).tau1= 4
+                PFnmda.object(((i-2)*nseg)+k).tau2 = 100
+                PFnmda.object(((i-2)*nseg)+k).tau3 = 255
+                   PFnmda.object(((i-2)*nseg)+k).e=0
+            }
+
+            for k=0,nseg-1 {
+              segpos = (2*(k+1)-1)/(2*nseg)
+              gabaML.append(new Golgi_extraGABA(segpos))
+              gabaML.object(((i-2)*nseg)+k).g = 16*(5e-3)*(180e-6)*150/nseg/2 // f*5ms*180pS*150 in total
+              gabaML.object(((i-2)*nseg)+k).e = -80
+            }
+        }
+    }
+    connect dend[i](0), soma(1)
+} // End dend for loop
+
+create axon
+axon {
+      nseg = 12 // 100
+      diam = 2.4 // gives 90 pF to get to the 145 pF Forti06
+      L = GoC_AxonL
+      Ra = 100
+      insert constant
+      insert Golgi_lkg
+
+      fix_celsius = 37
+      fix_celsius_Golgi_lkg = fix_celsius
+}
+
+connect axon(0), soma(0)
+
+    //Volvec.record(&soma.v(0.5))
+}
+
+
+obfunc connect2target() {localobj nc // $o1 target point process, optinal $o2 returned Netcon
+
+    soma nc = new NetCon(&v(0.5),$o1)
+    nc.threshold = -10
+    nc.record(spiketime)
+    if (numarg()==2) {$o2 = nc} // for backward compatibility
+    return nc
+}
+
+proc setv() {
+    forall v = $1
+}
+
+func lambda_f() { local i, x1, x2, d1, d2, lam, freq
+    freq = $1
+    return 1e5*sqrt(diam/(4*PI*freq*Ra*cm))
+}
+
+endtemplate Goc

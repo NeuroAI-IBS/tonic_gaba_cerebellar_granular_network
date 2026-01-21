@@ -1,0 +1,33 @@
+// Reserved for future development
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+//public PCdistance
+objref pc,PCdistance,PCID,PCdistance1,PCID1,PCSCdelay
+
+pc = new ParallelContext()
+PCdistance = new List()
+PCID = new List()
+for (i=pc.id;i<pc.nhost;i+=1) {
+    PCdistance = enPassage[0].PCBCdistance
+    PCID = enPassage[0].PCidentitiesforBC
+    //print  enPassage[0].PCdis.count
+
+}
+
+PCdistance1 = new List()
+PCID1 = new List()
+PCSCdelay= new List()
+for (i=pc.id;i<pc.nhost;i+=1) {
+    PCdistance1 = enPassage[0].PCSCdistance
+    PCID1 = enPassage[0].PCidentitiesforSC
+    PCSCdelay = enPassage[0].PCSCdelay
+    //print  enPassage[0].PCdis.count
+
+}

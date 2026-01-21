@@ -1,0 +1,4 @@
+NEURON>=7.4
+docopt>=0.6
+matplotlib>=3.0
+jupyter

@@ -1,0 +1,53 @@
+// Template for a cerebellar mossy fiber
+//
+// Written by Ivan Raikov, Shyam Kumar Sudhakar, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+begintemplate Mossytemp
+
+public vs,spiketime,connect2target
+external flag_vecstim
+objref vs,spiketime,r
+
+proc init() {
+
+  //vec=$1
+  spiketime=new Vector()
+  if (flag_vecstim ==1) {
+  vec = $1
+    if (vec == 0) {	// if inactive
+      vs = new NetStim()
+      vs.number = 0
+      vs.interval =7
+      vs.start = 8
+    } else{
+//      print "vecstim\n"
+      vs = new VecStim() //if active
+    }
+  } else {
+      r = new Random($1)
+      print "netstim\n"
+      vs = new NetStim()
+      vs.number   = 0//1e9
+      vs.interval = 100
+      vs.noise = r.uniform(0.3,1)
+      vs.start = 0
+      }
+
+
+}
+
+obfunc connect2target() {localobj nc // $o1 target point process, optinal $o2 returned Netcon
+    nc = new NetCon(vs,$o1)
+    nc.record(spiketime)
+    if (numarg()==2) {$o2 = nc} // for backward compatibility
+  return nc
+}
+
+endtemplate Mossytemp
+

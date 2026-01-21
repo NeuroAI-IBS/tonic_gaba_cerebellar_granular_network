@@ -1,0 +1,80 @@
+// Template for connections from cerebellar Golgi to granule cells
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+begintemplate GoCtoGC
+external GranulePop,GolgiPop,MossyPop,numDendGolgi,step_time,gseed,CV_gmax
+objref  inhNCelem,pc,r
+
+proc init() { local i,j,count,gocid localobj nc,ncm,cell,gc
+
+    print "Connecting GoCtoGC"
+
+    numGC  = GranulePop.nCells
+    numGoC = GolgiPop.nCells
+    nD     = numDendGolgi
+
+    p      = 1
+
+    // WT
+    mGABA  = 0.52e-3
+
+    // KO
+    // mGABA = 0.34e-3
+
+    SDGABA = mGABA*CV_gmax
+    del    = 20
+    thresh = -10
+
+    pc = new ParallelContext()
+    objref inhNCelem
+    inhNCelem = new List()
+    r = new Random(gseed)
+    r.uniform(0,nD-1)
+
+    if (p==1) {
+
+    // Inhibitory GoC to GC connections according rules defined by enPassage
+
+    for (i=pc.id; i < numGC; i +=pc.nhost) {
+
+        cell = pc.gid2cell(i+GranulePop.startindex)
+
+        if (cell.GoCID.size()>1) { // At least 1 GoC connection
+
+        for j=0, cell.GoCID.size()-1 {
+
+            gocid = cell.GoCID.x(j)
+            gc    = cell.gaba.object(0)
+
+            nc    = pc.gid_connect(gocid, gc)
+
+            if (cell.GoCdel.x(j)<=step_time) {
+                nc.delay=step_time+step_time/10
+            }else{
+                nc.delay=cell.GoCdel.x(j)
+            }
+
+            w1 = r.normal(mGABA*8/cell.GoCID.size()*3/2, SDGABA*SDGABA*8/cell.GoCID.size()*3/2)
+
+            nc.weight = w1
+
+            inhNCelem.append(nc)
+
+        }
+        }
+    }
+
+    }//if p
+
+} // end init
+endtemplate GoCtoGC
+
+objref ncGoCtoGC[1]
+ncGoCtoGC[0] = new GoCtoGC()

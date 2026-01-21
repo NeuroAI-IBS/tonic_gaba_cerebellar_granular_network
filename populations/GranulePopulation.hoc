@@ -1,0 +1,114 @@
+// Generation of the granule cell population
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+begintemplate GCPop
+
+public Cell, nCells, pc,make, prtPos,numGC,cumsum,vdestz,vdesty,ma,vic
+public  GCcoordinates, Tcoordinates,PFpoints
+public startindex, endindex,GLID
+external GCxrange, GCyrange, GCzrange,GCtoGoCratio,GoCdensity,MLdepth,GLdepth
+external RandomPF,gseed,PCLdepth, nband,bandwidth,round,loadtop,PFlength,PFstep
+external MF_GC_con
+
+/* numMF is the number of Mossy Fibers
+   dx,dy is the fine-grained spatial resolution of the network in micrometers
+   xrange is the x dimension of the network in micrometers
+   yrange is the y dimension of the network in micrometers
+   nX, nY are the number of MFs spread over each dimension such that
+   numMF ~ nX*nY
+   Rodrigo Publio - 17/08/09
+*/
+
+objref Cell, pc,r, GCcoordinates,Tcoordinates, vdesty,vdestz, filewidthz,filewidthy, vol, cumsum,vdy,GLID,PFpoints
+
+
+proc make(){ local i, srcgid, xr, yr, zr localobj alocalGC, nc, nil,vic
+
+    GLID = new Vector()
+    pc = new ParallelContext()
+    r  = new Random($1)
+    xr = GCxrange
+    yr = GCyrange
+    zr = GCzrange
+
+    numGC = int(GCtoGoCratio*xr*yr*zr*GoCdensity*1e-9)
+
+    nCells = numGC
+
+    printf("TotalGC = %4g\t, %4g GCs on host =%4g \n",nCells,int(numGC/pc.nhost),pc.id)
+
+    // The start index of granule cells
+    startindex = $2
+
+    // The end index of granule cells
+    endindex = startindex+numGC-1
+
+    // Create the list of Cells for the Granule population
+    // unique generator for each cell to ensure variability
+
+    Cell = new List()
+    GCcoordinates = new Matrix(numGC,3)
+    Tcoordinates = new Matrix(numGC,3)
+
+    for (i=pc.id; i < numGC; i +=pc.nhost) {
+
+    alocalGC = new GC_cl(gseed+1000*i,-100)
+    Cell.append(alocalGC)
+
+    pc.set_gid2node(i+startindex,pc.id)
+
+    nc = alocalGC.connect2target(nil) // attach spike detector to cell
+    pc.cell(i+startindex,nc) // associate gid i with spike detector
+
+
+    }
+    //ra = 0
+
+    for srcgid = 0, numGC-1 {
+
+	GCcoordinates.x[srcgid][0]=r.discunif(0,xr)
+	GCcoordinates.x[srcgid][1]=r.discunif(0,yr)
+	GCcoordinates.x[srcgid][2]=r.discunif(0,zr)
+    }
+
+
+    nPFpoints = int(PFlength/PFstep)
+    PFpoints = new Matrix(numGC*nPFpoints,4)
+
+    k=0
+    for srcgid = 0, numGC-1 { // loop over all cells
+
+	bandnumber = round(GCcoordinates.x[srcgid][0]/bandwidth) //Return the band associated with the neuron
+
+        // Trunk in the same x,y plane
+	Tcoordinates.x[srcgid][0]=GCcoordinates.x[srcgid][0]
+	Tcoordinates.x[srcgid][1]=GCcoordinates.x[srcgid][1]
+        Tcoordinates.x[srcgid][2]= GCcoordinates.x[srcgid][2]+GLdepth+PCLdepth // if Gldepth==MLdepth
+        PFstartpoint = Tcoordinates.x[srcgid][0]-PFlength
+
+        for l=0,nPFpoints-1 {
+
+        PFpoints.x[k][0] = PFstartpoint+(PFstep*l)
+        PFpoints.x[k][1] = Tcoordinates.x[srcgid][1]
+        PFpoints.x[k][2] = Tcoordinates.x[srcgid][2]
+        PFpoints.x[k][3] = srcgid
+        k=k+1
+
+       }
+
+
+
+    }
+}
+endtemplate GCPop
+
+objref GranulePop
+GranulePop = new GCPop()
+GranulePop.make(gseed,GolgiPop.endindex+1,pathwidthy,pathwidthz)

@@ -1,0 +1,176 @@
+// Template for inhibitory connections between cerebellar Golgi cells
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+begintemplate GoCtoGoC
+
+external GolgiPop, step_time, numAxonGolgi, numGABAGoC, GoC_GoC_inh_con, GoC_GoC_gap_con, vGoCtoGoCgapsources, vGoCtoGoCgaptargets, vGoCtoGoCgapdistances, gseed
+external GoC_GoC_gap_A1, GoC_GoC_gap_A2, GoC_GoC_gap_x0, GoC_GoC_gap_dx, GoC_GoC_gap_beta, GoC_GoC_gap_lambda
+external BoltzmannPDF, ExpPDF,CV_gmax
+objref par_gaps,pc,r,Golgigap,vGoCtoGoCgapsourcefinal, vGoCtoGoCgaptargetfinal, vGoCtoGoCgapdistancefinal
+public vGoCtoGoCgaptargetfinal, vGoCtoGoCgapsourcefinal, vGoCtoGoCgapdistancefinal
+
+objref  inhNCelem
+
+
+func gap_create() {localobj pc
+
+    pc = $o5
+
+    // for each gap junction create two unique global id in all hosts
+    gap_src_gid += 2
+
+    if (pc.gid_exists($1)) {
+        gap_create1($1, $2, gap_src_gid + 1, gap_src_gid, pc, $6)
+    }
+    if (pc.gid_exists($3)) {
+        gap_create1($3, $4, gap_src_gid, gap_src_gid + 1, pc, $6)
+    }
+    return 1
+}
+
+
+proc gap_create1() {local loc localobj pc, c, g,rn
+
+    pc = $o5
+
+    c = pc.gid2obj($1)
+    rn = new Random(gseed)
+    rn.uniform(0,1)
+    loc = rn.discunif(0,3)
+
+    c.dend[loc] {
+        g = new gap(.5)
+        g.g = $6
+        par_gaps.append(g)
+
+        pc.target_var(&g.vgap, $3)
+        pc.source_var(&v(.5), $4)
+    }
+}
+
+
+proc init() { local i,j,dist,a,b,axonid,tgaps,disgap,g localobj nc,cell,receptor,r1,r2
+    inhNCelem = new List()
+    r = new Random(gseed)
+    r1 = new Random(gseed)
+    r.uniform(0,1)
+    r2 = new Random(gseed)
+    Golgigap = new Matrix(GolgiPop.nCells,GolgiPop.nCells)
+    numGoC = GolgiPop.nCells
+
+    par_gaps=new List()
+    mGABA = 330e-6
+    SDGABA = mGABA*CV_gmax
+    del = 20
+    thresh = -10
+
+    pc = new ParallelContext()
+
+
+    if (GoC_GoC_inh_con == 1) {
+
+        for (i=pc.id; i < numGoC; i +=pc.nhost) {
+
+	    cell = pc.gid2cell(i+GolgiPop.startindex)
+
+	    // Connect GoC axons to GoC somas
+
+	    if(cell.GoCID.size() >= 1) { // At least 1 GoC connection
+
+        for j=0, cell.GoCID.size()-1 {
+  		    axonid = cell.GoCID.x(j)
+          dendno=r2.discunif(0,3)
+  		    receptor = cell.gaba.object(dendno)
+
+  		    nc = pc.gid_connect(axonid,receptor)
+
+  		    if (cell.GoCdel.x(j)<=step_time){
+                          nc.delay = step_time + step_time/10
+  		    }else{
+                          nc.delay=cell.GoCdel.x(j)
+  		    }
+
+  		    w=r1.normal(mGABA,SDGABA*SDGABA)
+  		    nc.weight=w
+            inhNCelem.append(nc)
+        }
+
+	    }
+
+        }
+    }
+
+    // Vary extra GABA with CV_gmax
+    for j=0, cell.gabaML.count()-1 {
+        mGABA1 = cell.gabaML.object(j).g
+        SDGABA1 = 0.01*mGABA1
+        w = r1.normal(mGABA1, SDGABA1*SDGABA1)
+        cell.gabaML.object(j).g = w
+    }
+
+
+    if (GoC_GoC_gap_con == 1) {
+
+        vGoCtoGoCgapsourcefinal  = new Vector()
+        vGoCtoGoCgaptargetfinal  = new Vector()
+        vGoCtoGoCgapdistancefinal = new Vector()
+
+        tgaps=0
+        for k=0,vGoCtoGoCgapsources.size()-1 {
+
+            // Connect GoC gap junctions
+
+            dist = vGoCtoGoCgapdistances.x[k]
+
+            prob = BoltzmannPDF(dist, GoC_GoC_gap_A1, GoC_GoC_gap_A2, GoC_GoC_gap_x0, GoC_GoC_gap_dx) / 100
+
+            a  = vGoCtoGoCgapsources.x[k]
+            b  = vGoCtoGoCgaptargets.x[k]
+
+            // Check if this gap junction has already been created
+            if (Golgigap.x[b][a]==1 || Golgigap.x[a][b]==1) {
+                continue
+            }
+
+       	    Golgigap.x[a][b] = 1
+
+            if (r.repick() <= prob) {
+
+	        pre  = vGoCtoGoCgapsources.x[k]
+	        post = vGoCtoGoCgaptargets.x[k]
+
+	        tgaps=tgaps+1
+
+                vGoCtoGoCgapsourcefinal.append(pre)
+                vGoCtoGoCgaptargetfinal.append(post)
+                vGoCtoGoCgapdistancefinal.append(vGoCtoGoCgapdistances.x[k])
+
+                g = ExpPDF(dist,GoC_GoC_gap_beta,GoC_GoC_gap_lambda) / 1000 // convert to microsiemens
+
+                //printf("Gap junction: dist = %g prob = %g g = %g\n", dist, prob, g)
+
+                gap_create (pre, 0, post, 0, pc, g)
+
+            }
+        }
+    }
+
+pc.barrier()
+
+printf("\nNumber of gap objects on host %d is %d\n",pc.id, par_gaps.count())
+printf("Total gap junctions = %d", tgaps)
+
+
+} // end init
+
+endtemplate GoCtoGoC
+
+objref ncGoCtoGoC[1]
+ncGoCtoGoC[0] = new GoCtoGoC()

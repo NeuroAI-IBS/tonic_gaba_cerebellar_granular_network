@@ -1,0 +1,174 @@
+// Template for connections from cerebellar mossy fibers to Golgi cells
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+begintemplate MFtoGoC
+public excNClem, enP
+external  numDendGolgi , MFcons, MFtoGoCzone,TS,step_time,CV_gmax,x_c1,x_c2,y_c1,y_c2
+external GolgiPop, GranulePop,gseed, MossyPop, MFtoGCzone, MLplug
+objref excNClem, enP,pc,r
+objref circle1,circle2,MFIDlist,MFdellist,Vec_size,tob_vec1,tob_vec2,idv
+
+
+proc init() { local i,j,count,mfid localobj nc,ncm,cell,ampasyn
+
+    nD     = numDendGolgi
+    numGC  = GranulePop.nCells
+    numMF  = MossyPop.nCells
+    numGoC = GolgiPop.nCells
+
+    mAMPA = 300e-6
+    SD_AMPA = mAMPA*CV_gmax
+    r = new Random(gseed)
+    del    = 20
+    thresh = -10
+
+    pc = new ParallelContext()
+
+    objref excNClem
+    excNClem = new List()
+
+    r = new Random(gseed)
+    r.uniform(0,nD-1)
+
+    enP = new enPassage()
+
+    if(MLplug==1) {  // This part is reserved for future development
+
+	enP.connectPops1(MossyPop,GranulePop,GolgiPop, MFtoGoCzone,MFtoGCzone, TS,$o1,$o2)
+	enP.connectPops2(MossyPop,GranulePop,GolgiPop, MFtoGoCzone,MFtoGCzone, TS,$o1,$o2)
+	enP.connectPops3(MossyPop,GranulePop,GolgiPop, MFtoGoCzone,MFtoGCzone, TS,$o1,$o2)
+	//enP.connectPops4(MossyPop,GranulePop,GolgiPop, MFtoGoCzone,MFtoGCzone, TS,$o1,$o2,PurkinjePop)
+	//enP.connectPops5(MossyPop,GranulePop,GolgiPop, MFtoGoCzone,MFtoGCzone, TS,$o1,$o2,PCPop)
+
+    } else {
+
+	enP.connectPops1(MossyPop,GranulePop,GolgiPop, MFtoGoCzone,MFtoGCzone, TS)
+	enP.connectPops2(MossyPop,GranulePop,GolgiPop, MFtoGoCzone,MFtoGCzone, TS)
+    //enP.connectPops1(MossyPop,GranulePop,GolgiPop, MFtoGoCzone,MFtoGCzone, TS)
+
+    }
+
+// Connect up to MFcons MFs to each Golgi cell according rules defined by enPassage
+pc.barrier()
+//MF testing patch 2 received same MF profile as patch 1 GOC duplication w.r.t MF inputboth spikes and connection
+MFtesting=0
+if (MFtesting ==1){
+circle1=new Vector()
+circle2=new Vector()
+MFIDlist=new List()
+MFdellist=new List()
+Vec_size = new Vector()
+idv=new Vector()
+
+for i=0,GolgiPop.GoCcoordinates.nrow-1 {
+goc_id = i
+GoC_c1 = (GolgiPop.GoCcoordinates.x[i][0]-x_c1)^2+(GolgiPop.GoCcoordinates.x[i][1]-y_c1)^2
+GoC_c1 = GoC_c1<=100*100
+GoC_c2 = (GolgiPop.GoCcoordinates.x[i][0]-x_c2)^2+(GolgiPop.GoCcoordinates.x[i][1]-y_c2)^2
+GoC_c2 = GoC_c2<=100*100
+
+idt=0
+if ( GoC_c1==1 ) {
+tob_vec1=new Vector()
+tob_vec2=new Vector()
+circle1.append(goc_id)
+if (pc.gid_exists(goc_id+GolgiPop.startindex)) {
+tob_vec1 = pc.gid2cell(goc_id+GolgiPop.startindex).MFID
+tob_vec2 = pc.gid2cell(goc_id+GolgiPop.startindex).MFdel
+idt = pc.id
+}
+idv=new Vector()
+pc.allgather(idt,idv)
+printf("Host is %f\n",idv.sum())
+pc.broadcast(tob_vec1,int(idv.sum))
+pc.broadcast(tob_vec2,int(idv.sum))
+
+pc.barrier()
+MFIDlist.append(tob_vec1)
+MFdellist.append(tob_vec2)
+pc.barrier()
+}
+
+if ( GoC_c2==1) {
+circle2.append(goc_id)
+
+}
+}
+
+printf("Total number of MFid is %f \n",MFIDlist.count())
+if (pc.id ==3) {
+for m=0,MFIDlist.count-1 {
+MFIDlist.object(m).printf
+}
+}
+
+pc.barrier()
+Vec_size.append(circle1.size)
+Vec_size.append(circle2.size)
+minsize=Vec_size.min()
+
+for i=0,minsize-1 {
+       goc_id = circle2.x[i]
+       if (pc.gid_exists(goc_id+GolgiPop.startindex)) {
+       pc.gid2cell(goc_id+GolgiPop.startindex).MFID = MFIDlist.object(i)
+       pc.gid2cell(goc_id+GolgiPop.startindex).MFdel = MFdellist.object(i)
+       //MFIDlist.object(i).printf
+        }
+}
+}
+
+// Mechanism over ////////////////////////////////////
+
+
+
+    pc.barrier()
+    for (i=pc.id; i < numGoC; i +=pc.nhost) {
+
+	cell = pc.gid2cell(i+GolgiPop.startindex)
+	if (cell.MFID.size()>1) { // At least 1 MF connection
+
+            for j=0, cell.MFID.size()-1 {
+		mfid    = cell.MFID.x(j)
+                dendno=r.discunif(0,1)
+
+		ampasyn = cell.ampa.object(dendno)
+		nc      = pc.gid_connect(mfid, ampasyn)
+		if (cell.MFdel.x(j)<=step_time){
+                    nc.delay=step_time +step_time/10
+		}else{
+                    nc.delay=cell.MFdel.x(j)
+		}
+
+
+                w = r.normal(mAMPA,SD_AMPA*SD_AMPA)
+
+		nc.weight=w
+		excNClem.append(nc)
+
+            }
+	}
+    }
+
+
+} // end init
+
+endtemplate MFtoGoC
+
+objref ncMFtoGoC[1]
+
+if(MLplug==1) { // This part is reserved for future development
+
+    ncMFtoGoC[0] = new MFtoGoC(StellatePop,BasketPop)
+
+} else {
+
+    ncMFtoGoC[0] = new MFtoGoC()
+
+}

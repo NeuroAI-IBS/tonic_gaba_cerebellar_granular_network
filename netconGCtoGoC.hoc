@@ -1,0 +1,149 @@
+// Template for connections from cerebellar granule to Golgi cells
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+begintemplate GCtoGoC
+external GranulePop,GolgiPop, step_time,numDendGolgi,numAMPAGolgiPF,numAMPAGolgiGC,gseed,CV_gmax,GoC_Ad_nseg,GoC_Bd_nseg,AA_GoC_con
+objref  excNCelem,pc
+
+proc init() { local i,j,count,axonid,pfid localobj nc,ncm,cell,dendrite,nc1,dendritenmda,r
+
+	print "Connecting GCtoGoC"
+	r=new Random(gseed)
+	numGC  = GranulePop.nCells
+	numGoC = GolgiPop.nCells
+
+	mAMPA= 200e-6 //uS
+	mNMDA=(800e-6)/2 //uS
+	SDAMPA  = mAMPA*CV_gmax
+	SDNMDA  = mNMDA*CV_gmax
+	mAMPA1  = mAMPA
+	SDAMPA1  = mAMPA1*CV_gmax
+
+
+	del = 20
+	thresh = -10
+
+	pc = new ParallelContext()
+	objref excNCelem
+	excNCelem = new List()
+
+
+	// Connect ascending axons to dendrites at the GL
+
+	for (i=pc.id; i < numGoC; i +=pc.nhost) {
+
+	cell = pc.gid2cell(i+GolgiPop.startindex)
+
+	if(cell.AxonID.size()>1){ // At least 1 PF connection
+
+		for j=0, cell.AxonID.size()-1 {
+
+			axonid = cell.AxonID.x(j)
+
+            if (AA_GoC_con == 1) { //for brep connectivity
+                dendno = cell.AAdend.x(j)
+                segno = cell.AAseg.x(j)
+                if (dendno<3) { //Ascending axons to Basal dendrites
+                    objpos		  = ((dendno-1)*GoC_Bd_nseg)+segno-1
+                    dendrite	  = cell.AAampa.object(objpos)
+                    dendritenmda  = cell.AAnmda.object(objpos)
+                }else{  // Ascending axons to apical
+                    objpos	      = ((dendno-3)*GoC_Ad_nseg)+segno-1
+                    dendrite	  = cell.PFampa.object(objpos)
+                    dendritenmda  = cell.PFnmda.object(objpos)
+		        }
+		   }else{ //for hoc connectivity
+                dendno		 = r.discunif(1,2) // pick a random dendrite
+                segno		 = r.discunif(1,GoC_Bd_nseg) // pick a random segment no
+                objpos		 = ((dendno-1)*GoC_Bd_nseg)+segno-1 // pick the object position from the list
+                dendrite	 = cell.AAampa.object(objpos)
+                dendritenmda = cell.AAnmda.object(objpos)
+		   }
+
+		   nc			= pc.gid_connect(axonid,dendrite)
+		   //nc1		 = pc.gid_connect(axonid,dendritenmda)
+
+
+		   if (cell.Axondel.x(j)<=step_time){
+				nc.delay =  step_time + step_time/10
+			 // nc1.delay = step_time + step_time/10
+			}else{
+				nc.delay = cell.Axondel.x(j)
+			 // nc1.delay = cell.Axondel.x(j)
+
+			}
+
+			wAMPA		= r.normal(mAMPA,SDAMPA*SDAMPA)
+			wNMDA		= r.normal(mNMDA,SDNMDA*SDNMDA)
+
+			nc.weight	= wAMPA
+			// nc1.weight = wNMDA
+			excNCelem.append(nc)
+			// excNCelem.append(nc1)
+
+
+		}
+	}
+	}
+
+	// Connect PF to dendrites at the ML
+
+	for (i=pc.id; i < numGoC; i +=pc.nhost) {
+
+	cell = pc.gid2cell(i+GolgiPop.startindex)
+
+	if (cell.PFID.size()>1) { // At least 1 MF connection
+
+		for j=0, cell.PFID.size()-1 {
+		pfid		  = cell.PFID.x(j)
+		dendno		= cell.PFdend.x(j)
+		segno		 = cell.PFseg.x(j)
+		objpos		= ((dendno-3)*GoC_Ad_nseg)+segno-1
+
+
+		dendrite	  = cell.PFampa.object(objpos)
+		dendritenmda  = cell.PFnmda.object(objpos)
+
+		nc = pc.gid_connect(pfid,dendrite)
+		// nc1 = pc.gid_connect(pfid,dendritenmda)
+
+		if (cell.PFdel.x(j)<=step_time) {
+		   nc.delay   = step_time + step_time/10
+		// nc1.delay  = step_time + step_time/10
+
+		}else{
+		   nc.delay   = cell.PFdel.x(j)
+		// nc1.delay  = cell.PFdel.x(j)
+
+		}
+
+			wAMPA	 = r.normal(mAMPA1,SDAMPA*SDAMPA)
+			wNMDA	 = r.normal(mNMDA,SDNMDA*SDNMDA)
+
+			if (cell.PFID.size()>5800) { // Extra scaling for some dangerously over-connected cells
+				nc.weight = wAMPA*(4750/6200)
+			} else {
+				nc.weight = wAMPA
+			}
+
+		 // nc1.weight= wNMDA
+			excNCelem.append(nc)
+		 // excNCelem.append(nc1)
+
+		}
+	}
+	}
+
+
+} // end init
+endtemplate GCtoGoC
+
+objref ncGCtoGoC[1]
+ncGCtoGoC[0] = new GCtoGoC()

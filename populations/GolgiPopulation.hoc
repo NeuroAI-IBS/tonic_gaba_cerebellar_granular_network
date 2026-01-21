@@ -1,0 +1,131 @@
+// Generation of the Golgi cell population
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+begintemplate GoCPop
+
+public Cell, make, nCells, numGoC, pc
+public GoCcoordinates, Adendcoordinates, Bdendcoordinates
+public startindex, endindex
+
+external GoCxrange, GoCyrange, GoCzrange, GoCdensity, MLdev, gseed, PCLdepth, loadtop, VLOW, VHIGH
+external GoC_ApicalDendL,GoC_BasolateralDendL,numDendGolgi,GoC_nDendML,bandwidth,round,Golgi_den_con
+//external GoC_Aphi_min, GoC_Aphi_max,GoC_Bphi_min,GoC_Bphi_max
+external GoC_Btheta_min, GoC_Btheta_max,GoC_Atheta_min,GoC_Atheta_max
+external numGABAGoC
+
+
+objref pc,Cell,GoCcoordinates,Adendcoordinates,Bdendcoordinates,r,vdesty,vdestz,filewidthz,filewidthy,vol,cumsum,rs,ranlist
+
+
+proc make() { local i, srcgid, xr, yr, zr,theta, phi localobj alocalGoC, nc, nil, netcon
+
+    r     = new Random($1)
+    pc    = new ParallelContext()
+    nDend = numDendGolgi
+    xr    = GoCxrange
+    yr    = GoCyrange
+    zr    = GoCzrange
+
+    numGoC = int(xr*yr*zr*GoCdensity*1e-9)
+    nCells = numGoC
+
+    // The start index of Golgi cells
+    startindex = $2
+
+    // The end index of Golgi cells
+    endindex = startindex+numGoC-1
+
+    print "Creating Golgi cells. This may take some time."
+
+    printf ("TotalGoC = %4g\t, %4g GoCs on host =%4g \n",numGoC,int(numGoC/pc.nhost),pc.id)
+
+    Cell = new List()
+    GoCcoordinates  = new Matrix(numGoC,3)
+    Adendcoordinates = new Matrix(numGoC,3*(GoC_nDendML))
+    Bdendcoordinates = new Matrix(numGoC,3*(nDend-GoC_nDendML))
+    ranlist = new List()
+
+    for (i=pc.id; i < numGoC; i +=pc.nhost) {
+        rs = new Random(gseed+1000*i)
+        ranlist.append(rs)
+        rs.uniform(VLOW, VHIGH)
+        vre = rs.repick()
+        alocalGoC = new Goc(gseed+1000*i,vre)
+        Cell.append(alocalGoC)
+        pc.set_gid2node(i+startindex,pc.id)  // associate gid i with this host
+        nc = alocalGoC.connect2target(nil) // attach spike detector to cell
+        pc.cell(i+startindex,nc) // associate gid i with spike detector
+    }
+
+    printf("Golgi cell pop created\n")
+    for srcgid = 0, numGoC-1 { // loop over all cells
+
+        GoCcoordinates.x[srcgid][0]=r.discunif(0,xr)
+
+        if (loadtop==1) {
+            val1 = (r.uniform(0,1)*cumsum.max())
+
+            for i=0, cumsum.size()-1 {
+                cvalue= (val1-cumsum.x(i))
+
+                if (cvalue<0) {
+                    GoCcoordinates.x[srcgid][1]=int(vdesty.x(i-1))
+                    GoCcoordinates.x[srcgid][2]=int(vdestz.x[i-1]+cvalue)
+                    break
+                }
+            }
+        } else {
+            GoCcoordinates.x[srcgid][1]=r.discunif(0,yr)
+            GoCcoordinates.x[srcgid][2]=r.discunif(0,zr)
+        }
+
+    //Return the band associated with the neuron
+	bandnumber = round(GoCcoordinates.x[srcgid][0]/bandwidth)
+
+	if (Golgi_den_con ==1) {
+            count=0
+
+            // Dendrites x,y,z coordinates defined by spherical coordinates
+            // nDend-nDendML dendrites connecting to the GL and nDendML connecting to ML
+
+            for i=0, GoC_nDendML-1 {
+
+               	theta=(PI/180)*r.uniform(GoC_Atheta_min, GoC_Atheta_max)
+               	phi=(PI/180)*r.uniform(GoC_Aphi_min, GoC_Aphi_max)
+
+               	Adendcoordinates.x[srcgid][count] = GoC_ApicalDendL*cos(phi)*sin(theta) + GoCcoordinates.x[srcgid][0]
+               	Adendcoordinates.x[srcgid][count+1] = GoC_ApicalDendL*sin(phi)*sin(theta) + GoCcoordinates.x[srcgid][1]
+               	Adendcoordinates.x[srcgid][count+2] = GoC_ApicalDendL*cos(theta) + GoCcoordinates.x[srcgid][2]
+
+                count=count+3
+            }
+
+            count=0
+
+            for i=0, numDendGolgi-GoC_nDendML-1 {
+
+               	theta=(PI/180)*r.uniform(GoC_Btheta_min, GoC_Btheta_max)
+               	phi=(PI/180)*r.uniform(GoC_Bphi_min, GoC_Bphi_max)
+
+               	Bdendcoordinates.x[srcgid][count] = GoC_BasolateralDendL*cos(phi)*sin(theta) + GoCcoordinates.x[srcgid][0]
+               	Bdendcoordinates.x[srcgid][count+1] = GoC_BasolateralDendL*sin(phi)*sin(theta) + GoCcoordinates.x[srcgid][1]
+               	Bdendcoordinates.x[srcgid][count+2] = GoC_BasolateralDendL*cos(theta) + GoCcoordinates.x[srcgid][2]
+
+                count=count+3
+            }
+        }
+    }
+}
+
+endtemplate GoCPop
+
+objref GolgiPop
+GolgiPop = new GoCPop()
+GolgiPop.make(gseed+1,0,pathwidthy,pathwidthz)

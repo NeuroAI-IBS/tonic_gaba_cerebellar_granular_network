@@ -1,0 +1,47 @@
+// Helper functions to create of the principal populations of the molecular layer
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+objref cvode,MFtoGCfile,MFtoGCfile1,MFtoGCfile2,MFtoGoCfile,pc1,IndexfileGoC,GCGLfile,GoCGLfile,GranuleVolfile
+objref GoCtoGoCfile,GoCtoGoCgapfile,GoCtoGCfile,PFtoGoCfile,AxontoGoCfile,IndexfileGC,Granulegcurrentfile,Granulegconductancefile
+objref MFGoCtotalfile,MFGCtotalfile,PFGoCtotalfile,AxonGoCtotalfile
+objref GoCcoordinatesfile, GCcoordinatesfile, MFcoordinatesfile, MFspikefile, GoCadendcoordinatesfile, GoCbdendcoordinatesfile
+objref GoCspiketimefile, cvector,GCspiketimefile, VMGoCfile, VMGCfile,BCSpikefile,BCfile,PCfile,GCTcoordinatesfile
+objref PFtoSCfile, PFtoBCfile, PFSCtotalfile, PFBCtotalfile, BCgapfile,gapconfile,BCtoBCfile,SCSpikeFile,PCspike
+objref SCcoordinatesfile, BCcoordinatesfile,SCGapFile,SCtoSCFile,nil,MFGCdelfile,MFGoCdelfile,PFGoCdelfile,AAGoCdelfile,GoCGCdelfile,GoCGoCdelfile
+objref rand,timefile, Vtime, MFBundleCenter,MFBundleCenter_file,tmpfile,tmpfile1,GolgiVolfile
+objref StellatePop , BasketPop,strobj,verify,GoCampafile,BCtoPCfile,SCtoPCfile,filea,fileb,current_GoC,GoCgapsourcefinal,GoCgaptargetfinal,GoCgapdistancefinal
+
+
+rand = new Random()
+rand.uniform(-80,60)
+pc1=new ParallelContext()
+cvode = new CVode(0)
+cvector = new Vector()
+cvode.active(0)
+use_mcell_ran4(1)
+//cvode.use_local_dt(1)
+st = pc1.time
+
+
+objref hines
+hinest1 = startsw()
+hinest2 = startsw()
+hines = new FInitializeHandler(2, "hinest1=startsw() hinest2=startsw() hines1()")
+
+proc hines1() {
+        dt = step_time
+        printf("%d t=%g dt=%g dreal=%g treal=%g\n", \
+                pc1.id, t, dt, startsw()-hinest2, startsw()-hinest1)
+              //  if(pc1.gid_exists(5)){
+              //        print "Vm",pc1.gid2cell(5).soma.v(0.5)
+              //    }
+        hinest2 = startsw()
+        cvode.event(t + 1, "hines1()")
+}

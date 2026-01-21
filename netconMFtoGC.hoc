@@ -1,0 +1,90 @@
+// Template for connections from cerebellar mossy fibers to granule cells
+//
+// Written by Shyam Kumar Sudhakar, Ivan Raikov, Tom Close, Rodrigo Publio, Daqing Guo, and Sungho Hong
+// Computational Neuroscience Unit, Okinawa Institute of Science and Technology, Japan
+// Supervisor: Erik De Schutter
+//
+// Correspondence: Sungho Hong (shhong@oist.jp)
+//
+// September 16, 2017
+
+begintemplate MFtoGC
+public NCelem,enP,nc,ncm
+external GranulePop, GolgiPop, MossyPop, step_time, CV_gmax, gseed
+objref  NCelem,enP,pc
+
+proc init(){ local i,j, count, mfid localobj nc, ncm, cell,syn,r
+
+    print "Connecting MFtoGC"
+    r       = new Random(gseed)
+    numGC   = GranulePop.nCells
+    numMF   = MossyPop.nCells
+    numGoC  = GolgiPop.nCells
+    mAMPA   = 0.75*1200e-6
+    mNMDA   = 0.9*0.75*18800e-6
+    SDAMPA  = mAMPA*CV_gmax
+    SDNMDA  = mNMDA*CV_gmax
+    del     = 20
+    thresh  = -10
+
+    pc = new ParallelContext()
+    objref NCelem
+    NCelem = new List()
+
+    // Connect up to 4 MF to each Granule cell according rules defined by enPassage
+    for (i=pc.id; i < numGC; i +=pc.nhost) {
+
+    cell = pc.gid2cell(i+GranulePop.startindex)
+
+    if (cell.MFID.size()>1) { // At least 1 MF connection
+
+        for j=0, cell.MFID.size()-1 {
+
+          mfid    = cell.MFID.x(j)
+
+          // if synapses are maxed out, create new synapses
+          if (j==cell.ampa.count()) {
+            cell.soma cell.ampa.append(new GrCAMPAplusNMDA(0.5))
+            // cell.soma cell.NMDA.append(new GrCNMDAreduced(0.5))
+          }
+          syn = cell.ampa.object(j)
+          // nmdasyn = cell.NMDA.object(j)
+
+          wAMPA   = r.normal(mAMPA, SDAMPA*SDAMPA)
+          wNMDA   = r.normal(mNMDA, SDNMDA*SDNMDA)
+
+          // synaptic weights are in synapses
+          syn.gmax_ampa = wAMPA
+          syn.gmax_nmda = wNMDA
+
+          nc   = pc.gid_connect(mfid, syn)
+          //ncm  = pc.gid_connect(mfid, nmdasyn)
+
+          // weights should be 1 - one release event
+          nc.weight  = 1
+          //ncm.weight = 1
+
+          if (cell.MFdel.x(j) <= step_time) {
+              nc.delay = step_time + step_time/10
+          } else {
+              nc.delay = cell.MFdel.x(j)
+          }
+
+          //if (cell.MFdel.x(j)<=step_time) {
+          //    ncm.delay = step_time + step_time/10
+          //}else{
+          //    ncm.delay = cell.MFdel.x(j)
+          //}
+
+          NCelem.append(nc)
+          //NCelem.append(ncm)
+
+        }   // end for MFID
+    } // end if MFID size >1
+    } // end for all grc
+
+} // end init
+endtemplate MFtoGC
+
+objref ncMFtoGC[1]
+ncMFtoGC[0] = new MFtoGC()
